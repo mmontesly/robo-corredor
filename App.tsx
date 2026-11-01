@@ -118,6 +118,7 @@ export default function App() {
   const setMySkin = (k: number) => { setMySkinS(k); saveJ('robo-corredor-skin', k); };
   const [story, setStory] = useState<null | { w: WorldId; n: number }>(null);
   const [storyMsg, setStoryMsg] = useState('');
+  const [skinInfo, setSkinInfo] = useState('');
   const [world, setWorldS] = useState<WorldId>('fabrica');
   const worldRef = useRef<WorldId>('fabrica'); worldRef.current = world;
   const setWorld = (w: WorldId) => { worldRef.current = w; setWorldS(w); };
@@ -312,6 +313,7 @@ export default function App() {
   const storyRef = useRef(story); storyRef.current = story;
   const gidx = (w: WorldId, n: number) => WORLD_IDS.indexOf(w) * 5 + n - 1;
   const skinOpen = (k: number, d = done) => k < FREE_SKINS || (k === SKINS.length - 1 ? d.length >= WORLD_IDS.length * 5 : d.includes(k - FREE_SKINS));
+  const lockText = (k: number) => { if (k === SKINS.length - 1) return 'complete todas as 50 fases do Modo História! ✨'; const gi = k - FREE_SKINS; const w = WORLD_IDS[Math.floor(gi / 5)]; const n = gi % 5 + 1; return `ganhe na Fase ${n} (${(WORLDS[w].space ? SPACE_PHASES : PHASES)[n - 1]}) de ${WORLDS[w].emoji} ${WORLDS[w].name}`; };
   const phaseOpen = (w: WorldId, n: number) => n === 1 || done.includes(gidx(w, n - 1));
   const storyFinish = (place: number) => {
     const st = storyRef.current; if (!st) return;
@@ -580,22 +582,25 @@ export default function App() {
         <View style={st.overlay}>
           <View style={[st.card, { maxHeight: height - 60, paddingHorizontal: 10 }]}>
             <Text style={st.title}>🎭 Skins</Text>
+            <View style={st.banner}><Text style={st.bannerText}>🔒 Jogue o 📖 Modo História para ganhar novas skins!</Text></View>
+            <Pressable style={[st.mbtn, { backgroundColor: '#9775FA', marginBottom: 8 }]} onPress={() => setMode('story')} accessibilityLabel="ir para modo historia"><Text style={st.btnText}>📖 Ir para o Modo História</Text></Pressable>
+            {!!skinInfo && <Text style={st.skinInfo}>{skinInfo}</Text>}
             <Text style={st.wname}>{SKINS[mySkin].name} · {SKINS.filter((_, k) => skinOpen(k)).length}/50 liberadas</Text>
             <ScrollView style={{ width: '100%', marginVertical: 10 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
               {SKINS.map((k, i) => { const open = skinOpen(i); return (
-                <Pressable key={i} disabled={!open} accessibilityLabel={'skin ' + k.name} onPress={() => setMySkin(i)} style={[st.skinCell, mySkin === i && { borderColor: '#FB5607', backgroundColor: '#FFF3E0' }]}>
-                  <View style={{ transform: [{ scale: 0.55 }], width: ROBOT, height: ROBOT, alignItems: 'center', marginTop: 10 }}><RobotBody color={PCOL[0]} skin={i} dim={!open} t={s.t} /></View>
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#023047', textAlign: 'center' }} numberOfLines={1}>{open ? k.name : '🔒 ' + (i === SKINS.length - 1 ? 'Tudo' : 'Fase ' + (i - FREE_SKINS + 1))}</Text>
+                <Pressable key={i} accessibilityLabel={'skin ' + k.name} onPress={() => { if (open) { setMySkin(i); setSkinInfo(''); } else setSkinInfo(`🔒 ${k.name}: ${lockText(i)}`); }} style={[st.skinCell, mySkin === i && { borderColor: '#FB5607', backgroundColor: '#FFF3E0' }]}>
+                  <View style={{ transform: [{ scale: 0.55 }], width: ROBOT, height: ROBOT, alignItems: 'center', marginTop: 4, marginBottom: -4 }}><RobotBody color={PCOL[0]} skin={i} dim={!open} t={s.t} /></View>
+                  <Text style={st.skinLabel} numberOfLines={2}>{open ? k.name : '🔒 ' + k.name}</Text>
                 </Pressable>); })}
             </ScrollView>
-            <Text style={{ fontSize: 12, color: '#495057', textAlign: 'center', marginBottom: 8 }}>Ganhe skins completando fases do Modo História. A Dourada aparece quando você completar tudo!</Text>
             <Pressable style={[st.btn, { backgroundColor: '#ADB5BD' }]} onPress={() => setMode('menu')}><Text style={st.btnText}>← Voltar</Text></Pressable>
           </View>
         </View>
       )}
       {mode !== 'play' && mode !== 'lobby' && mode !== 'count' && mode !== 'story' && mode !== 'skins' && (
         <View style={st.overlay} pointerEvents="box-none">
-          <View style={st.card}>
+          <View style={[st.card, { maxHeight: height - 30, paddingHorizontal: 18 }]}>
+          <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center' }}>
             {mode === 'podium' && s.online ? (() => {
               const pod = s.pod ?? { order: [], gone: [] };
               const pending = s.ids.filter(i => !pod.order.includes(i) && !pod.gone.includes(i));
@@ -635,14 +640,15 @@ export default function App() {
               <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => start(true, story)}><Text style={st.btnText}>↻ De novo</Text></Pressable>
               <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginTop: 14 }]} onPress={() => { setStory(null); setMode('story'); }}><Text style={st.btnText}>🗺️ Mapa</Text></Pressable>
             </>) : (<>
-            {mode === 'menu' && <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-              <Pressable style={[st.btn2, { backgroundColor: '#9775FA' }]} onPress={() => setMode('story')} accessibilityLabel="modo historia"><Text style={st.btn2Text}>📖 História</Text></Pressable>
-              <Pressable style={[st.btn2, { backgroundColor: '#F06595' }]} onPress={() => setMode('skins')} accessibilityLabel="skins"><Text style={st.btn2Text}>🎭 Skins</Text></Pressable>
-            </View>}
-            {onlineAvailable() && <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginBottom: 14 }]} onPress={() => { leaveRoom(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Online</Text></Pressable>}
-            <Pressable style={st.btn} onPress={() => { leaveRoom(); start(true); }}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
-            <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => { leaveRoom(); start(false); }}><Text style={st.btnText}>∞ Sem fim</Text></Pressable>
+            {mode === 'menu' && <>
+              <Pressable style={[st.mbtn, { backgroundColor: '#F06595' }]} onPress={() => { setSkinInfo(''); setMode('skins'); }} accessibilityLabel="skins"><Text style={st.btnText}>🎭 Skins</Text></Pressable>
+              <Pressable style={[st.mbtn, { backgroundColor: '#9775FA' }]} onPress={() => setMode('story')} accessibilityLabel="modo historia"><Text style={st.btnText}>📖 História</Text></Pressable>
+            </>}
+            {onlineAvailable() && <Pressable style={[st.mbtn, { backgroundColor: '#FB5607' }]} onPress={() => { leaveRoom(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Online</Text></Pressable>}
+            <Pressable style={[st.mbtn, { backgroundColor: '#06D6A0' }]} onPress={() => { leaveRoom(); start(true); }}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
+            <Pressable style={[st.mbtn, { backgroundColor: '#219EBC' }]} onPress={() => { leaveRoom(); start(false); }}><Text style={st.btnText}>∞ Sem fim</Text></Pressable>
             </>)}
+          </ScrollView>
           </View>
         </View>
       )}
@@ -731,6 +737,11 @@ const st = StyleSheet.create({
   btn2Text: { fontSize: 20, fontWeight: '900', color: '#fff' },
   mapRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F3F5' },
   phase: { width: 40, height: 40, borderRadius: 20, marginRight: 6, marginVertical: 3, alignItems: 'center', justifyContent: 'center' },
-  skinCell: { width: 62, height: 74, margin: 3, borderRadius: 12, backgroundColor: '#F8F9FA', borderWidth: 3, borderColor: 'transparent', alignItems: 'center', overflow: 'hidden' },
+  skinCell: { width: 68, height: 92, margin: 3, borderRadius: 12, backgroundColor: '#F8F9FA', borderWidth: 3, borderColor: 'transparent', alignItems: 'center', overflow: 'hidden' },
+  mbtn: { width: '100%', maxWidth: 340, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  banner: { width: '100%', backgroundColor: '#FFD43B', borderRadius: 18, padding: 12, marginVertical: 8, borderWidth: 3, borderColor: '#FB5607' },
+  bannerText: { fontSize: 19, fontWeight: '900', color: '#023047', textAlign: 'center' },
+  skinInfo: { fontSize: 15, fontWeight: '800', color: '#9C36B5', textAlign: 'center', marginBottom: 6 },
+  skinLabel: { fontSize: 9.5, lineHeight: 11, fontWeight: '800', color: '#023047', textAlign: 'center', paddingHorizontal: 2 },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
