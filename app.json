@@ -2,4 +2,4 @@
 "splash":{"image":"./assets/splash-icon.png","resizeMode":"contain","backgroundColor":"#FFB703"},
 "ios":{"bundleIdentifier":"br.com.minanoideias.robocorredor","supportsTablet":true},
 "android":{"package":"br.com.minanoideias.robocorredor","adaptiveIcon":{"foregroundImage":"./assets/adaptive-icon.png","backgroundColor":"#FFB703"}},
-"web":{"favicon":"./assets/favicon.png","output":"single","name":"Robô Corredor","shortName":"Robô Corredor","themeColor":"#FFB703","backgroundColor":"#FFB703","lang":"pt-BR"}}}
+"web":{"favicon":"./assets/favicon.png","output":"single","name":"Nodex: Robô Corredor","shortName":"Nodex","themeColor":"#FFB703","backgroundColor":"#FFB703","lang":"pt-BR"}}}

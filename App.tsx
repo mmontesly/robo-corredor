@@ -1,9 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } from './online';
 
 type Obj = { id: number; x: number; kind: 'gear' | 'oil' | 'battery'; y: number; taken?: boolean };
-type Mode = 'menu' | 'play' | 'over' | 'podium';
+type Mode = 'menu' | 'play' | 'over' | 'podium' | 'lobby' | 'count';
+const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0'];
+const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde'];
+type Other = { d: number; y: number; fin?: number; gone?: boolean; seen?: number };
+function makeTrack(seed: number) {
+  const r = rng(seed); const out: { wx: number; kind: 'gear' | 'oil' | 'battery'; y: number }[] = [];
+  for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const k = r(); const kind = k < 0.35 ? 'gear' : k < 0.6 ? 'oil' : 'battery'; out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); }
+  return out;
+}
 type Rival = { name: string; color: string; d: number; v: number };
 const FINISH = 7000;
 const newRivals = (): Rival[] => [
@@ -45,8 +54,50 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean) => ({ y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0 });
+  const fresh = (race: boolean) => ({ y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, note: '' });
   const g = useRef(fresh(false));
+  const roomRef = useRef<Room | null>(null);
+  const [lv, setLv] = useState<{ view: 'choose' | 'join' | 'room' | 'wait'; code: string; err: string; ids: number[] }>({ view: 'choose', code: '', err: '', ids: [] });
+  const [count, setCount] = useState(3);
+  const leaveRoom = () => { roomRef.current?.close(); roomRef.current = null; };
+  const beginOnline = (seed: number, ids: number[], me: number) => {
+    const n = fresh(true); n.rivals = []; n.online = true; n.me = me; n.ids = ids;
+    n.track = makeTrack(seed); n.objs = n.track.map((t, i) => ({ id: i, x: 9999, kind: t.kind, y: t.y }));
+    ids.filter(i => i !== me).forEach(i => { n.others[i] = { d: 0, y: 0, seen: Date.now() + 4000 }; });
+    g.current = n; setCount(3); setMode('count');
+    [1, 2, 3].forEach(k => setTimeout(() => { setCount(3 - k); sfx(k === 3 ? 880 : 440, 0.15); }, k * 1000));
+    setTimeout(() => setMode('play'), 3000);
+  };
+  const onMsg = (m: Msg) => {
+    const s = g.current;
+    if (m.t === 'lobby') setLv(v => ({ ...v, ids: m.ids }));
+    else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0);
+    else if (s.online && m.t === 's' && s.others[m.i]) { s.others[m.i].d = m.d; s.others[m.i].y = m.y; s.others[m.i].seen = Date.now(); }
+    else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; force(n => n + 1); }
+    else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `Robô ${PNAME[m.i]} saiu`; force(n => n + 1); } }
+  };
+  const onClose = () => {
+    const s = g.current;
+    if (s.online) { Object.values(s.others).forEach(o => { o.gone = true; }); s.note = 'A sala fechou. Continue correndo!'; force(n => n + 1); }
+    else setLv({ view: 'choose', code: '', err: 'A sala fechou.', ids: [] });
+    roomRef.current = null;
+  };
+  const errText = (e: any) => e === 'full' ? 'Essa sala está cheia ou já começou.' : e === 'peer-unavailable' || e === 'timeout' ? 'Sala não encontrada. Confira o número.' : 'Sem conexão. Tente de novo.';
+  const hostRoom = async () => { setLv({ view: 'wait', code: '', err: '', ids: [] }); try { const r = await createRoom({ onMsg, onClose }); roomRef.current = r; setLv({ view: 'room', code: r.code, err: '', ids: [0] }); } catch (e) { setLv({ view: 'choose', code: '', err: errText(e), ids: [] }); } };
+  const join = async (code: string) => { setLv(v => ({ ...v, view: 'wait', err: '' })); try { const r = await joinRoom(code, { onMsg, onClose }); roomRef.current = r; setLv(v => ({ view: 'room', code, err: '', ids: v.ids.length ? v.ids : [0, r.me] })); } catch (e) { setLv({ view: 'join', code: '', err: errText(e), ids: [] }); } };
+  const hostStart = () => { const r = roomRef.current; if (!r?.isHost) return; const ids = r.ids(); if (ids.length < 2) return; r.lock(); const seed = Math.floor(Math.random() * 1e9); r.send({ t: 'start', seed, ids }); beginOnline(seed, ids, 0); };
+  useEffect(() => {
+    const iv = setInterval(() => {
+      const s = g.current; if (!s.online) return;
+      if (mode === 'podium') roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: 0 });
+      let ch = false;
+      for (const [k, o] of Object.entries(s.others)) if (!o.gone && o.fin === undefined && Date.now() - (o.seen ?? 0) > 6000) { o.gone = true; s.note = `Robô ${PNAME[Number(k)]} saiu`; ch = true; }
+      if (ch) force(n => n + 1);
+    }, 700);
+    const bye = () => roomRef.current?.close();
+    if (Platform.OS === 'web') window.addEventListener('pagehide', bye);
+    return () => { clearInterval(iv); if (Platform.OS === 'web') window.removeEventListener('pagehide', bye); };
+  }, [mode]);
   const mutedRef = useRef(false); mutedRef.current = muted;
   const sfx = (f: number, d?: number, t?: string) => { if (!mutedRef.current) beep(f, d, t); };
 
@@ -74,13 +125,18 @@ export default function App() {
         for (const r of s.rivals) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * dt;
       } else s.speed = 260 + s.t * 6;
       s.dist += s.speed * dt;
-      if (s.race && s.dist >= FINISH) {
+      if (s.online) {
+        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y }); }
+        if (s.dist >= FINISH) { s.myTime = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
+      }
+      if (s.race && !s.online && s.dist >= FINISH) {
         s.place = 1 + s.rivals.filter(r => r.d >= s.dist).length;
         sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60);
         setMode('podium'); force(n => n + 1); return;
       }
       s.vy -= GRAV * dt; s.y = Math.max(0, s.y + s.vy * dt); if (s.y === 0) s.vy = 0;
       s.next -= dt;
+      if (s.online) s.next = 99;
       if (s.next <= 0) {
         const r = Math.random();
         const kind: Obj['kind'] = r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery';
@@ -89,7 +145,7 @@ export default function App() {
       }
       const rx = 60;
       for (const o of s.objs) {
-        o.x -= s.speed * dt;
+        if (s.online) o.x = 60 + s.track[o.id].wx - s.dist; else o.x -= s.speed * dt;
         const w = o.kind === 'oil' ? 60 : 40;
         const overlapX = o.x < rx + ROBOT - 10 && o.x + w > rx + 10;
         if (!overlapX || o.taken) continue;
@@ -119,7 +175,11 @@ export default function App() {
   };
 
   const s = g.current;
-  const place = 1 + s.rivals.filter(r => r.d > s.dist).length;
+  const place = s.online ? 1 + Object.values(s.others).filter(o => !o.gone && (o.fin !== undefined || o.d > s.dist)).length : 1 + s.rivals.filter(r => r.d > s.dist).length;
+  const ranking = () => {
+    const all = [{ i: s.me, d: s.dist, fin: mode === 'podium' ? s.myTime : undefined as number | undefined, gone: false }, ...Object.entries(s.others).map(([i, o]) => ({ i: Number(i), ...o }))];
+    return all.sort((a, b) => (a.fin ?? 1e9) - (b.fin ?? 1e9) || b.d - a.d);
+  };
   const ord = ['1º', '2º', '3º', '4º'];
   const gearRot = `${(s.t * 360) % 360}deg`;
   return (
@@ -140,6 +200,12 @@ export default function App() {
             <Text key={o.id} style={[st.battery, { left: o.x, bottom: GROUND + o.y }]}>🔋</Text>
           ))}
           {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
+          {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const x = 60 + (o.d - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
+            <View key={'p' + i} style={[st.robot, { left: x, bottom: GROUND + o.y + i * 5, opacity: 0.85 }]}>
+              <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
+              <View style={[st.head, { backgroundColor: PCOL[i] }]}><View style={st.eye} /><View style={st.eye} /></View>
+              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{PNAME[i]}</Text>
+            </View>); })}
           {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist); if (x < -80 || x > width + 80) return null; return (
             <View key={r.name} style={[st.robot, { left: x, bottom: GROUND + 4 + i * 6, opacity: 0.9, transform: [{ scale: 0.85 }] }]}>
               <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
@@ -148,8 +214,8 @@ export default function App() {
             </View>); })}
           <View style={[st.robot, { left: 60, bottom: GROUND + s.y }]}>
             <View style={st.antenna} /><View style={st.ball} />
-            <View style={st.head}><View style={st.eye} /><View style={st.eye} /></View>
-            <View style={st.smile} />
+            <View style={[st.head, { backgroundColor: PCOL[s.online ? s.me : 0] }]}><View style={st.eye} /><View style={st.eye} /></View>
+            <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}
           </View>
         </View>
       </Pressable>
@@ -162,15 +228,68 @@ export default function App() {
             <View style={st.bar}><View style={[st.barFill, { width: `${Math.min(100, (s.dist / FINISH) * 100)}%` }]} /></View>
           </View>
         ) : <Text style={st.best}>Recorde: {best}</Text>}
+        {!!s.note && mode === 'play' && <Text style={st.note}>{s.note}</Text>}
         <Pressable style={st.mute} onPress={() => setMuted(m => !m)} accessibilityLabel={muted ? 'Ligar som' : 'Desligar som'}>
           <Text style={{ fontSize: 30 }}>{muted ? '🔇' : '🔊'}</Text>
         </Pressable>
       </View>
 
-      {mode !== 'play' && (
+      {(mode === 'count' || (mode === 'play' && s.online && s.t < 0.8)) && (
+        <View style={st.overlay} pointerEvents="none"><Text style={st.count}>{count > 0 ? count : 'Já!'}</Text></View>
+      )}
+      {mode === 'lobby' && (
+        <View style={st.overlay}>
+          <View style={st.card}>
+            <Text style={st.title}>Corrida online 👥</Text>
+            {lv.view === 'choose' && (<>
+              <Text style={st.sub}>Até 4 robôs! Uma pessoa cria a sala e as outras entram com o número.</Text>
+              <Pressable style={st.btn} onPress={hostRoom}><Text style={st.btnText}>➕ Criar sala</Text></Pressable>
+              <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => setLv({ view: 'join', code: '', err: '', ids: [] })}><Text style={st.btnText}>🔢 Entrar</Text></Pressable>
+            </>)}
+            {lv.view === 'wait' && <Text style={st.sub}>Conectando… ⏳</Text>}
+            {lv.view === 'join' && (<>
+              <Text style={st.codeBox}>{(lv.code + '____').slice(0, 4).split('').join(' ')}</Text>
+              <View style={st.pad}>
+                {['1','2','3','4','5','6','7','8','9','⌫','0','✓'].map(k => (
+                  <Pressable key={k} style={st.key} accessibilityLabel={'tecla ' + k} onPress={() => {
+                    if (k === '⌫') setLv(v => ({ ...v, code: v.code.slice(0, -1) }));
+                    else if (k === '✓') { if (lv.code.length === 4) join(lv.code); }
+                    else if (lv.code.length < 4) setLv(v => ({ ...v, code: v.code + k }));
+                  }}><Text style={st.keyText}>{k}</Text></Pressable>))}
+              </View>
+            </>)}
+            {lv.view === 'room' && (<>
+              <Text style={st.sub}>Número da sala:</Text>
+              <Text style={st.codeBox}>{lv.code.split('').join(' ')}</Text>
+              <View style={{ flexDirection: 'row', marginVertical: 12 }}>
+                {[0, 1, 2, 3].map(i => <View key={i} style={[st.mini, { marginHorizontal: 6, backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} />)}
+              </View>
+              <Text style={st.sub}>{lv.ids.length}/{MAX} robôs na sala</Text>
+              {roomRef.current?.isHost ? (
+                <Pressable style={[st.btn, lv.ids.length < 2 && { opacity: 0.4 }]} onPress={hostStart}><Text style={st.btnText}>{lv.ids.length < 2 ? 'Esperando…' : '▶ Começar'}</Text></Pressable>
+              ) : <Text style={st.sub}>Esperando quem criou a sala começar…</Text>}
+            </>)}
+            {!!lv.err && <Text style={[st.sub, { color: '#D00000' }]}>{lv.err}</Text>}
+            <Pressable style={[st.btn, { backgroundColor: '#ADB5BD', marginTop: 14 }]} onPress={() => { leaveRoom(); setMode('menu'); }}><Text style={st.btnText}>← Voltar</Text></Pressable>
+          </View>
+        </View>
+      )}
+      {mode !== 'play' && mode !== 'lobby' && mode !== 'count' && (
         <View style={st.overlay} pointerEvents="box-none">
           <View style={st.card}>
-            {mode === 'podium' ? (<>
+            {mode === 'podium' && s.online ? (<>
+              <Text style={st.title}>{ranking()[0].i === s.me ? 'Você venceu! 🏆' : 'Que corrida! 🎉'}</Text>
+              <View style={st.podium}>
+                {(() => { const r = ranking(); const order = [r[1], r[0], r[2], r[3]]; const h = [70, 100, 50, 35];
+                  return order.map((p, k) => p && (
+                    <View key={p.i} style={{ alignItems: 'center', marginHorizontal: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#023047' }}>{p.i === s.me ? 'Você' : PNAME[p.i]}</Text>
+                      <View style={[st.mini, { backgroundColor: PCOL[p.i], opacity: p.gone ? 0.3 : 1 }]} />
+                      <View style={[st.step, { height: h[k], width: 60 }]}><Text style={st.stepText}>{p.fin === undefined && !p.gone ? '…' : ['2º', '1º', '3º', '4º'][k]}</Text></View>
+                    </View>)); })()}
+              </View>
+              <Text style={st.sub}>{Object.values(s.others).some(o => o.fin === undefined && !o.gone) ? 'Esperando os outros robôs chegarem…' : `Você pegou ${s.score} bateria${s.score === 1 ? '' : 's'}!`}</Text>
+            </>) : mode === 'podium' ? (<>
               <Text style={st.title}>{s.place === 1 ? 'Nodex venceu! 🏆' : 'Que corrida! 🎉'}</Text>
               <View style={st.podium}>
                 {(() => { const list = [{ name: 'Nodex', color: '#4CC9F0', d: s.dist + (s.place === 1 ? 1e6 : 0) }, ...s.rivals].sort((x, y) => y.d - x.d); const top = list.slice(0, 3); const order = [top[1], top[0], top[2]]; const h = [70, 100, 50];
@@ -186,8 +305,9 @@ export default function App() {
               <Text style={st.title}>{mode === 'menu' ? 'Nodex: Robô Corredor' : 'Tente de novo! 😄'}</Text>
               <Text style={st.sub}>{mode === 'menu' ? 'Toque na tela para o Nodex pular as engrenagens e o óleo. Pegue baterias!' : `O Nodex pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best}`}</Text>
             </>)}
-            <Pressable style={st.btn} onPress={() => start(true)}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
-            <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => start(false)}><Text style={st.btnText}>∞ Sem fim</Text></Pressable>
+            {onlineAvailable() && <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginBottom: 14 }]} onPress={() => { leaveRoom(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Online</Text></Pressable>}
+            <Pressable style={st.btn} onPress={() => { leaveRoom(); start(true); }}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
+            <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => { leaveRoom(); start(false); }}><Text style={st.btnText}>∞ Sem fim</Text></Pressable>
           </View>
         </View>
       )}
@@ -229,5 +349,11 @@ const st = StyleSheet.create({
   mini: { width: 34, height: 34, borderRadius: 8, borderWidth: 3, borderColor: '#023047', marginVertical: 4 },
   step: { width: 70, backgroundColor: '#FFB703', borderTopLeftRadius: 10, borderTopRightRadius: 10, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontSize: 22, fontWeight: '900', color: '#fff' },
+  count: { fontSize: 120, fontWeight: '900', color: '#FB5607' },
+  note: { position: 'absolute', top: 100, left: 16, right: 16, textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#023047' },
+  codeBox: { fontSize: 44, fontWeight: '900', color: '#023047', letterSpacing: 4, marginVertical: 8 },
+  pad: { flexDirection: 'row', flexWrap: 'wrap', width: 270, justifyContent: 'center' },
+  key: { width: 76, height: 64, margin: 6, borderRadius: 16, backgroundColor: '#FFE8A3', alignItems: 'center', justifyContent: 'center' },
+  keyText: { fontSize: 30, fontWeight: '900', color: '#023047' },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
