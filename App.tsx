@@ -22,7 +22,7 @@ const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0'];
 const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde'];
 // Apelidos só de uma lista pronta (sem texto livre = sem nomes reais/dados pessoais).
 const NICKS = ['Raio', 'Foguete', 'Turbo', 'Faísca', 'Pipoca', 'Trovão', 'Cometa', 'Bolinha', 'Pulinho', 'Parafuso', 'Estrela', 'Biscoito'];
-type Other = { dd?: number; dy?: number; v?: number; lt?: number; d: number; y: number; fin?: number; gone?: boolean; seen?: number; z?: boolean; c?: boolean };
+type Other = { dd?: number; dy?: number; v?: number; lt?: number; d: number; y: number; fin?: number; gone?: boolean; seen?: number; z?: boolean; c?: boolean; g?: boolean };
 function makeTrack(seed: number, w: World) {
   const r = rng(seed); const out: { wx: number; kind: Kind; y: number }[] = [];
   for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const kind = pickKind(r(), w); out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); if (kind === 'igloo') wx += 80; }
@@ -86,7 +86,7 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, prepScarf: -1, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
@@ -115,7 +115,7 @@ export default function App() {
     if (m.t === 'lobby') { setLv(v => ({ ...v, ids: m.ids })); if (roomRef.current?.isHost) { const keep: Record<number, string> = {}; m.ids.forEach(i => { if (nicksRef.current[i]) keep[i] = nicksRef.current[i]; }); nicksRef.current = keep; roomRef.current.send({ t: 'world', w: worldRef.current }); roomRef.current.send({ t: 'nicks', map: keep }); } }
     else if (m.t === 'world') { if (WORLDS[m.w as WorldId]) setWorld(m.w as WorldId); }
     else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0, (WORLDS[m.w as WorldId] ? m.w : 'fabrica') as WorldId);
-    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.z = m.z; o.c = m.c; o.seen = Date.now(); }
+    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.z = m.z; o.c = m.c; o.g = m.g; o.seen = Date.now(); }
     else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; publish(); }
     else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone }; force(n => n + 1); }
     else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `${nameOf(m.i)} saiu`; publish(); } }
@@ -163,11 +163,11 @@ export default function App() {
     const loop = (ts: number) => {
       const dt = last ? Math.min((ts - last) / 1000, 0.05) : 0; last = ts;
       const s = g.current; s.t += dt; const W = WORLDS[s.w];
-      s.frozen = Math.max(0, s.frozen - dt); s.storm = Math.max(0, s.storm - dt);
+      s.frozen = Math.max(0, s.frozen - dt); s.shelter = Math.max(0, s.shelter - dt); s.storm = Math.max(0, s.storm - dt);
       if (W.ice && s.t >= s.stormAt) {
         s.stormAt += s.period; s.storm = 1.5;
         const inIgloo = s.objs.some(o => o.kind === 'igloo' && o.x < 60 + ROBOT - 6 && o.x + 90 > 60 + 6);
-        if (inIgloo) sfx(700, 0.2, 'triangle'); else if (s.coat) { s.coat = false; sfx(600, 0.2, 'triangle'); } else { s.frozen = 1.5; s.slow = 0; sfx(300, 0.4, 'sine'); buzz(80); }
+        if (inIgloo) { s.shelter = 1.6; sfx(700, 0.2, 'triangle'); } else if (s.coat) { s.coat = false; sfx(600, 0.2, 'triangle'); } else { s.frozen = 1.5; s.slow = 0; sfx(300, 0.4, 'sine'); buzz(80); }
         for (const r of s.rivals) r.frozen = Math.random() < 0.55 ? 1.5 : 0;
       }
       if (W.ice && mode === 'play') { // antes de cada tempestade: sempre uma roupinha e um iglu no caminho
@@ -188,10 +188,10 @@ export default function App() {
       if (s.online) for (const o of Object.values(s.others)) { // suaviza: prevê com a velocidade e aproxima devagar
         if (o.fin === undefined) o.d += (o.v ?? 0) * dt;
         o.dd = o.dd === undefined ? o.d : o.dd + (o.d - o.dd) * Math.min(1, dt * 8);
-        o.dy = o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
+        o.dy = o.y <= 1 ? 0 : o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
       }
       if (s.online) {
-        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y, z: s.frozen > 0, c: s.coat }); }
+        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0 }); }
         if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
@@ -257,7 +257,7 @@ export default function App() {
   const gearRot = `${(s.t * 360) % 360}deg`;
   const W = WORLDS[s.w];
   const gy = (wx: number) => GROUND + hill(W, wx);
-  const Extras = ({ z, c }: { z?: boolean; c?: boolean }) => (<>{c && <Text style={st.scarf}>🧣</Text>}{z && <View style={st.iceCube}><Text style={{ fontSize: 14 }}>❄️</Text></View>}</>);
+  const Extras = ({ z, c, g: ig }: { z?: boolean; c?: boolean; g?: boolean }) => (<>{c && <Text style={st.scarf}>🧣</Text>}{ig && <View style={st.iglooBadge} testID="igloo-badge"><View style={st.iglooBadgeDoor} /></View>}{z && <View style={st.iceCube}><Text style={{ fontSize: 14 }}>❄️</Text></View>}</>);
   const warn = W.ice && mode === 'play' && s.stormAt - s.t < 2 && s.stormAt - s.t > 0;
   return (
     <View style={[st.root, { backgroundColor: W.sky }]}>
@@ -286,13 +286,13 @@ export default function App() {
           ); })}
           {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT, bottom: gy(FINISH) }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
           {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const od = o.dd ?? o.d; const x = 60 + (od - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
-            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(od) + (o.dy ?? o.y) + i * 5, opacity: 0.85 }]}>
+            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(od + (i - s.me) * 26) + (o.y > 1 ? (o.dy ?? o.y) : 0), opacity: 0.9 }]}>
               <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
               <View style={[st.head, { backgroundColor: PCOL[i] }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} />
+              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} g={o.g} />
             </View>); })}
-          {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist); if (x < -80 || x > width + 80) return null; return (
-            <View key={r.name} style={[st.robot, { left: x, bottom: gy(r.d) + 4 + i * 6, opacity: 0.9, transform: [{ scale: 0.85 }] }]}>
+          {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist) + (i + 1) * 8; if (x < -80 || x > width + 80) return null; return (
+            <View key={r.name} style={[st.robot, { left: x, bottom: gy(s.dist + x - 60), opacity: 0.9, transform: [{ scale: 0.85 }] }]}>
               <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
               <View style={[st.head, { backgroundColor: r.color }]}><View style={st.eye} /><View style={st.eye} /></View>
               <View style={st.smile} /><Text style={st.tag}>{r.name}</Text><Extras z={(r.frozen ?? 0) > 0} />
@@ -300,7 +300,7 @@ export default function App() {
           <View style={[st.robot, { left: 60, bottom: gy(s.dist) + s.y, transform: s.slow > 0 && s.race ? [{ rotate: `${(1 - s.slow) * 360}deg` }] : [] }]}>
             <View style={st.antenna} /><View style={st.ball} />
             <View style={[st.head, { backgroundColor: PCOL[s.online ? s.me : 0] }]}><View style={st.eye} /><View style={st.eye} /></View>
-            <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} />
+            <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} g={s.shelter > 0} />
           </View>
         </View>
       </Pressable>
@@ -466,5 +466,7 @@ const st = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 8, margin: 3, borderRadius: 18, backgroundColor: '#F1F3F5', borderWidth: 2, borderColor: 'transparent' },
   chipOn: { borderColor: '#FB5607', backgroundColor: '#FFF3E0' },
   chipText: { fontSize: 15, fontWeight: '800', color: '#023047' },
+  iglooBadge: { position: 'absolute', top: -30, right: -26, width: 30, height: 20, borderTopLeftRadius: 15, borderTopRightRadius: 15, backgroundColor: '#fff', borderWidth: 2, borderColor: '#0096C7', alignItems: 'center', justifyContent: 'flex-end' },
+  iglooBadgeDoor: { width: 10, height: 9, borderTopLeftRadius: 5, borderTopRightRadius: 5, backgroundColor: '#023047' },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
