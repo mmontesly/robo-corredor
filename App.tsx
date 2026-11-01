@@ -3,16 +3,20 @@ import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from
 import * as Haptics from 'expo-haptics';
 import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } from './online';
 
-type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo';
-type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean; dyn?: boolean };
-type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade';
-type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; tip: string };
+type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo' | 'ans';
+type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean; dyn?: boolean; label?: string; color?: string; ok?: boolean; q?: number };
+type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade' | 'vulcao' | 'matematica' | 'portugues' | 'cores';
+type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; lava?: boolean; quiz?: 'math' | 'pt' | 'cor'; tip: string };
 const WORLDS: Record<WorldId, World> = {
   fabrica: { emoji: '🏭', name: 'Fábrica', sky: '#FFE8A3', deco: ['#8ECAE6', '#A0C4FF', '#BDB2FF', '#9BF6FF'], ground: '#6C757D', top: '#FB8500', belt: '▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸', a: '⚙️', b: '', puddle: '#1D3557', roll: true, tip: 'Pule as engrenagens e o óleo!' },
   gelo: { emoji: '❄️', name: 'Gelo', sky: '#DFF6FF', deco: ['#FFFFFF', '#CAF0F8', '#ADE8F4', '#E9F5FF'], ground: '#BDE0FE', top: '#FFFFFF', belt: '❄  ❄  ❄  ❄  ❄  ❄  ❄  ❄', a: '⚪', b: '🧊', roll: true, ice: true, tip: 'Pule bolas de neve e gelo. Na ❄️ Tempestade, use a 🧣 roupinha ou entre no iglu!' },
   deserto: { emoji: '🏜️', name: 'Deserto', sky: '#FFE5B4', deco: ['#F4A261', '#E9C46A', '#F6BD60', '#E76F51'], ground: '#E9C46A', top: '#F4A261', belt: '', a: '🌵', b: '🪨', hills: true, tip: 'Suba e desça as dunas pulando cactos e pedras!' },
   doces: { emoji: '🍭', name: 'Doces', sky: '#FFE5EC', deco: ['#FFC8DD', '#BDE0FE', '#CDB4DB', '#FFAFCC'], ground: '#CDB4DB', top: '#FF8FAB', belt: '🍬    🍬    🍬    🍬    🍬', a: '🍩', b: '', puddle: '#FF4D8D', roll: true, tip: 'Pule as rosquinhas e a calda grudenta!' },
   cidade: { emoji: '🏙️', name: 'Cidade', sky: '#CAF0F8', deco: ['#ADB5BD', '#90E0EF', '#FFD6A5', '#CDB4DB'], ground: '#495057', top: '#ADB5BD', belt: '—   —   —   —   —   —   —', a: '🚗', b: '🚕', cars: true, tip: 'Pule os carrinhos que vêm na rua!' },
+  vulcao: { emoji: '🌋', name: 'Vulcão', sky: '#FFE0C2', deco: ['#D4A373', '#CCD5AE', '#E9EDC9', '#FAEDCD'], ground: '#7F5539', top: '#FF9F1C', belt: '·  ·  ·  ·  ·  ·  ·  ·  ·', a: '', b: '', puddle: '#FF7B00', lava: true, tip: 'O vulcão solta bolinhas de lava que quicam: pule na hora certa!' },
+  matematica: { emoji: '🔢', name: 'Matemática', sky: '#E7F5FF', deco: ['#A5D8FF', '#FFD8A8', '#B2F2BB', '#FFC9C9'], ground: '#4C6EF5', top: '#FFD43B', belt: '1  2  3  4  5  6  7  8  9', a: '➕', b: '📏', roll: true, quiz: 'math', tip: 'Resolva a conta: pule na bolha certa (em cima) ou passe por baixo para turbo!' },
+  portugues: { emoji: '🔤', name: 'Português', sky: '#FFF9DB', deco: ['#FFEC99', '#D0BFFF', '#A5D8FF', '#FFC9C9'], ground: '#AE3EC9', top: '#FFD43B', belt: 'A  E  I  O  U  A  E  I  O', a: '📚', b: '✏️', quiz: 'pt', tip: 'Complete a palavra com a letra certa para ganhar turbo!' },
+  cores: { emoji: '🎨', name: 'Cores', sky: '#F8F0FC', deco: ['#FF8787', '#FFD43B', '#69DB7C', '#74C0FC'], ground: '#495057', top: '#F06595', belt: '●  ●  ●  ●  ●  ●  ●  ●', a: '🎨', b: '', puddle: '#F06595', roll: true, quiz: 'cor', tip: 'Pule na bolha da cor pedida para ganhar turbo!' },
 };
 const WORLD_IDS = Object.keys(WORLDS) as WorldId[];
 const hill = (w: World, wx: number) => w.hills ? 55 + 35 * Math.sin(wx / 260) + 15 * Math.sin(wx / 97) : 0;
@@ -27,6 +31,16 @@ function makeTrack(seed: number, w: World) {
   const r = rng(seed); const out: { wx: number; kind: Kind; y: number }[] = [];
   for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const kind = pickKind(r(), w); out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); if (kind === 'igloo') wx += 80; }
   return out;
+}
+const WORDS = ['GATO', 'BOLA', 'CASA', 'PATO', 'SAPO', 'LUA', 'SOL', 'UVA', 'MALA', 'FOCA', 'BOLO', 'DADO', 'PIPA', 'SUCO', 'MESA', 'VACA'];
+const COLS: [string, string][] = [['AZUL', '#339AF0'], ['VERMELHO', '#FA5252'], ['AMARELO', '#FCC419'], ['VERDE', '#40C057'], ['ROXO', '#9775FA'], ['LARANJA', '#FD7E14'], ['ROSA', '#F783AC']];
+// Desafio de quiz (mesmo resultado em todos os celulares, pois vem da semente da corrida)
+function makeQuiz(kind: 'math' | 'pt' | 'cor', seed: number) {
+  const r = rng(seed); const hiOk = r() < 0.5;
+  if (kind === 'math') { const a = 1 + Math.floor(r() * 5), b = 1 + Math.floor(r() * 5); const ok = a + b; let bad = ok + (r() < 0.5 ? -1 : 1) * (1 + Math.floor(r() * 2)); if (bad < 0) bad = ok + 2; return { prompt: `${a} + ${b} = ?`, ok: String(ok), bad: String(bad), hiOk }; }
+  if (kind === 'pt') { const w = WORDS[Math.floor(r() * WORDS.length)]; const idx = [...w].findIndex(c => 'AEIOU'.includes(c)); const ok = w[idx]; const others = 'AEIOU'.replace(ok, ''); const bad = others[Math.floor(r() * others.length)]; return { prompt: `Complete: ${w.slice(0, idx)}_${w.slice(idx + 1)}`, ok, bad, hiOk }; }
+  const a = Math.floor(r() * COLS.length); let b = Math.floor(r() * (COLS.length - 1)); if (b >= a) b++;
+  return { prompt: `Pule no ${COLS[a][0]}!`, ok: COLS[a][1], bad: COLS[b][1], hiOk };
 }
 const stormPlan = (seed: number) => { const r = rng(seed ^ 0x5eed); return { first: 7 + r() * 2, period: 9 + r() * 2 }; };
 type Rival = { name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
@@ -89,7 +103,7 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
@@ -178,6 +192,13 @@ export default function App() {
         if (inIgloo) { s.shelter = 1.6; sfx(700, 0.2, 'triangle'); } else if (s.coat) { s.coat = false; sfx(600, 0.2, 'triangle'); } else { s.frozen = 1.5; s.slow = 0; sfx(300, 0.4, 'sine'); buzz(80); }
         for (const r of s.rivals) r.frozen = Math.random() < 0.55 ? 1.5 : 0;
       }
+      if (W.quiz && s.t >= s.quizAt) {
+        const q = makeQuiz(W.quiz, s.seed + s.quizN * 7919); s.quizN++; s.quizAt += 6.5;
+        s.quiz = q.prompt; s.quizRes = '';
+        const x = width + 40; const mk = (ok: boolean, hi: boolean) => ({ id: 200000 + s.id++, x, kind: 'ans' as Kind, y: hi ? 150 : 8, dyn: true, ok, q: s.quizN, label: W.quiz === 'cor' ? '' : ok ? q.ok : q.bad, color: W.quiz === 'cor' ? (ok ? q.ok : q.bad) : '#FFFFFF' });
+        s.objs = s.objs.filter(o => o.x < x - 140 || o.x > x + 140 || o.kind === 'battery');
+        s.objs.push(mk(true, q.hiOk), mk(false, !q.hiOk));
+      }
       if (W.ice && mode === 'play') { // antes de cada tempestade: sempre uma roupinha e um iglu no caminho
         const left = s.stormAt - s.t;
         if (left < 4.5 && s.prepScarf !== s.stormAt) { s.prepScarf = s.stormAt; s.objs.push({ id: 100000 + s.id++, x: width + 30, kind: 'coat', y: 0, dyn: true }); }
@@ -230,17 +251,26 @@ export default function App() {
         const overlapX = o.x < rx + ROBOT - 10 && o.x + w > rx + 10;
         if (!overlapX || o.taken) continue;
         if (o.kind === 'igloo') continue;
+        if (o.kind === 'ans') { // decide pela altura do robô ao chegar na bolha
+          const hi = s.y > 70; if ((o.y > 70) !== hi) continue;
+          for (const z of s.objs) if (z.kind === 'ans' && z.q === o.q) z.taken = true;
+          if (o.ok) { s.boost = 2.2; s.score += 2; s.quizRes = 'Acertou! Turbo! 🚀'; sfx(1046, 0.2, 'triangle'); setTimeout(() => sfx(1318, 0.25, 'triangle'), 150); }
+          else { s.quizRes = 'Ops! Na próxima você acerta 😊'; sfx(330, 0.2, 'sine'); }
+          continue;
+        }
+        if (W.lava && o.kind === 'gear') { const by = Math.abs(Math.sin(s.t * 3.2 + o.id)) * 70; if (!(s.y < by + 32 && s.y + ROBOT > by + 4)) continue; }
         if (o.kind === 'coat') { if (s.y < 60) { o.taken = true; s.coat = true; sfx(1000, 0.15, 'triangle'); } continue; }
         if (o.kind === 'battery') {
           if (s.y + ROBOT > o.y && s.y < o.y + 40) { o.taken = true; s.score++; s.boost = 1.2; sfx(880, 0.1, 'triangle'); }
-        } else if (s.y < (o.kind === 'oil' && !W.cars ? 10 : 34)) {
+        } else if (W.lava && o.kind === 'gear' || s.y < (o.kind === 'oil' && !W.cars ? 10 : 34)) {
           sfx(200, 0.3, 'sine'); buzz(120);
           if (s.race) { o.taken = true; s.slow = 1; continue; }
           const b = Math.max(store.get(), s.score); store.set(b); setBest(b);
           setMode('over'); force(n => n + 1); return;
         }
       }
-      s.objs = s.objs.filter(o => o.x > -120 && !((o.kind === 'battery' || o.kind === 'coat') && o.taken));
+      s.objs = s.objs.filter(o => o.x > -120 && !((o.kind === 'battery' || o.kind === 'coat' || o.kind === 'ans') && o.taken));
+      if (s.quiz && !s.objs.some(o => o.kind === 'ans')) s.quiz = '';
       if (s.race && s.dist > FINISH - 400) s.next = 99;
       force(n => n + 1);
       raf = requestAnimationFrame(loop);
@@ -295,6 +325,11 @@ export default function App() {
     <View style={[st.root, { backgroundColor: W.sky }]}>
       <Pressable style={StyleSheet.absoluteFill} onPressIn={tap} accessibilityLabel="Toque para o Nodex pular">
         <View style={[st.sky, { backgroundColor: W.sky }]}>
+          {W.lava && (<>
+            <View style={[st.volcano, { left: width - 260, bottom: GROUND }]} />
+            <View style={[st.crater, { left: width - 160, bottom: GROUND + 210 }]} />
+            {[0, 1, 2].map(k => { const ph = (s.t * 0.7 + k / 3) % 1; return <View key={'lb' + k} style={[st.lava, { width: 22, height: 22, left: width - 140 + (k - 1) * 60 * ph, bottom: GROUND + 220 + Math.sin(ph * Math.PI) * 120 }]} />; })}
+          </>)}
           {[0, 1, 2, 3].map(i => (
             <View key={i} style={[st.machine, { left: ((i * 160 - s.t * 40) % (width + 160) + width + 160) % (width + 160) - 120, height: (W.cars ? 160 : 90) + (i % 2) * 60 + (W.hills ? 60 : 0), backgroundColor: W.deco[i], borderRadius: W.ice || W.hills ? 60 : undefined }]} />
           ))}
@@ -307,6 +342,10 @@ export default function App() {
           {s.objs.map(o => { if (o.x > width + 100) return null; const b = gy(s.dist + o.x - 60); return o.kind === 'oil' ? (
             W.puddle ? <View key={o.id} style={[st.oil, { left: o.x, bottom: b - 6, backgroundColor: W.puddle }]} />
               : <Text key={o.id} style={[st.gear, { left: o.x, bottom: b - 4, fontSize: W.cars ? 44 : 30 }]}>{W.b}</Text>
+          ) : o.kind === 'gear' && W.lava ? (
+            <View key={o.id} style={[st.lava, { left: o.x, bottom: b + Math.abs(Math.sin(s.t * 3.2 + o.id)) * 70 }]}><View style={st.lavaEye} /><View style={st.lavaEye} /></View>
+          ) : o.kind === 'ans' ? (
+            <View key={o.id} style={[st.bubble, { left: o.x - 4, bottom: b + o.y, backgroundColor: o.color }]}><Text style={st.bubbleText}>{o.label}</Text></View>
           ) : o.kind === 'gear' ? (
             <Text key={o.id} style={[st.gear, { left: o.x, bottom: b - 4, fontSize: W.cars ? 44 : 40, transform: W.roll ? [{ rotate: `-${gearRot}` }] : [] }]}>{W.a}</Text>
           ) : o.kind === 'coat' ? (
@@ -340,6 +379,7 @@ export default function App() {
       </Pressable>
 
       {W.ice && s.storm > 0 && mode === 'play' && <View style={st.snow} pointerEvents="none"><Text style={st.snowText}>❄️  ❄️  ❄️{'\n'}  ❄️  ❄️  ❄️{'\n'}❄️  ❄️  ❄️</Text></View>}
+      {!!W.quiz && mode === 'play' && !!(s.quiz || s.quizRes) && <View style={st.quizBox} pointerEvents="none">{!!s.quiz && <Text style={st.quizText}>{s.quiz}</Text>}{!!s.quizRes && <Text style={st.quizRes}>{s.quizRes}</Text>}</View>}
       {warn && <Text style={st.warn} pointerEvents="none">❄️ Tempestade! {s.coat ? '🧣 Você está protegido!' : 'Pegue a 🧣 ou entre no iglu!'}</Text>}
       <View style={st.hud} pointerEvents="box-none">
         <Text style={st.score}>🔋 {s.score}</Text>
@@ -513,5 +553,14 @@ const st = StyleSheet.create({
   pbtn: { width: 84, height: 84, borderRadius: 42, backgroundColor: '#FB5607', alignItems: 'center', justifyContent: 'center', marginLeft: 10, borderWidth: 4, borderColor: '#fff' },
   pbtnText: { fontSize: 32, color: '#fff', fontWeight: '900' },
   plabel: { fontSize: 11, color: '#fff', fontWeight: '800' },
+  lava: { position: 'absolute', width: 40, height: 36, borderRadius: 20, backgroundColor: '#FF7B00', borderWidth: 3, borderColor: '#FFD166', flexDirection: 'row', justifyContent: 'space-evenly', paddingTop: 10 },
+  lavaEye: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#5A189A' },
+  volcano: { position: 'absolute', width: 0, height: 0, borderLeftWidth: 130, borderRightWidth: 130, borderBottomWidth: 230, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: '#9C6644' },
+  crater: { position: 'absolute', width: 60, height: 22, borderRadius: 11, backgroundColor: '#FF9F1C' },
+  bubble: { position: 'absolute', width: 52, height: 52, borderRadius: 26, borderWidth: 4, borderColor: '#023047', alignItems: 'center', justifyContent: 'center' },
+  bubbleText: { fontSize: 24, fontWeight: '900', color: '#023047' },
+  quizBox: { position: 'absolute', top: 130, left: 20, right: 20, alignItems: 'center', backgroundColor: '#FFFFFFEE', borderRadius: 20, padding: 12 },
+  quizText: { fontSize: 32, fontWeight: '900', color: '#023047' },
+  quizRes: { fontSize: 20, fontWeight: '800', color: '#2B8A3E', marginTop: 4 },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
