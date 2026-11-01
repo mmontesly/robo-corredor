@@ -126,7 +126,7 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, lvl: 0, lvlPop: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
@@ -245,7 +245,12 @@ export default function App() {
         s.projs = s.projs.filter(pj => pj.life > 0);
         for (const pd of s.puddles) for (const k of racers(s)) { if (k === pd.owner || pd.hit.includes(k) || k[0] === 'p') continue; const d = posOf(s, k); if (d + ROBOT > pd.wx + 20 && d < pd.wx + 40 && !(k === 'me' && s.y > 10)) { pd.hit.push(k); hitKey(s, k); } }
         s.puddles = s.puddles.filter(pd => pd.wx > s.dist - 600);
-      } else target = 260 + s.t * 6;
+      } else { // Sem fim: fica mais rápido a cada 100 m (até 8 níveis)
+        const lvl = Math.min(8, Math.floor(meters(s.dist) / 100));
+        if (lvl > s.lvl) { s.lvl = lvl; s.lvlPop = 1.6; sfx(784, 0.12, 'triangle'); setTimeout(() => sfx(1046, 0.18, 'triangle'), 120); buzz(40); }
+        s.lvlPop = Math.max(0, s.lvlPop - dt);
+        target = 260 * (1 + 0.12 * lvl) + Math.min(20, s.t);
+      }
       if (s.frozen > 0) s.speed = 0;
       else if (W.ice) s.speed += (target - s.speed) * Math.min(1, dt * 1.5); // escorrega no gelo
       else s.speed = target;
@@ -272,7 +277,7 @@ export default function App() {
       if (s.next <= 0) {
         const kind = pickKind(Math.random(), W);
         s.objs.push({ id: s.id++, x: width + 40, kind, y: kind === 'battery' ? (Math.random() < 0.5 ? 20 : 130) : 0 });
-        s.next = (0.7 + Math.random() * 0.9) * (1.2 - 0.06 * s.diff) - Math.min(s.t / 120, 0.3);
+        s.next = Math.max((0.7 + Math.random() * 0.9) * (1.2 - 0.06 * s.diff) - (s.race ? Math.min(s.t / 120, 0.3) : 0), 560 / Math.max(s.speed, 1)); // sempre dá para pular
       }
       const rx = 60;
       for (const o of s.objs) {
@@ -494,6 +499,7 @@ export default function App() {
 
       {W.ice && s.storm > 0 && mode === 'play' && <View style={st.snow} pointerEvents="none"><Text style={st.snowText}>❄️  ❄️  ❄️{'\n'}  ❄️  ❄️  ❄️{'\n'}❄️  ❄️  ❄️</Text></View>}
       {!!W.quiz && mode === 'play' && !!(s.quiz || s.quizRes) && <View style={st.quizBox} pointerEvents="none">{!!s.quiz && <Text style={st.quizText}>{s.quiz}</Text>}{!!s.quizRes && <Text style={st.quizRes}>{s.quizRes}</Text>}</View>}
+      {!s.race && mode === 'play' && s.lvlPop > 0 && <Text style={st.speedPop} pointerEvents="none">⚡ Mais rápido! ⚡{'\n'}<Text style={{ fontSize: 18 }}>Velocidade {s.lvl + 1}</Text></Text>}
       {warn && <Text style={st.warn} pointerEvents="none">❄️ Tempestade! {s.coat ? '🧣 Você está protegido!' : 'Pegue a 🧣 ou entre no iglu!'}</Text>}
       <View style={st.hud} pointerEvents="box-none">
         <Text style={[st.score, W.space && { color: '#fff' }]}>🔋 {s.score}</Text>
@@ -745,5 +751,6 @@ const st = StyleSheet.create({
   skinInfo: { fontSize: 15, fontWeight: '800', color: '#9C36B5', textAlign: 'center', marginBottom: 6 },
   skinLabel: { fontSize: 9.5, lineHeight: 11, fontWeight: '800', color: '#023047', textAlign: 'center', paddingHorizontal: 2 },
   meters: { fontSize: 30, fontWeight: '900', color: '#FB5607' },
+  speedPop: { position: 'absolute', top: 150, left: 20, right: 20, textAlign: 'center', fontSize: 34, fontWeight: '900', color: '#FB5607', backgroundColor: '#FFFFFFDD', borderRadius: 20, padding: 10 },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
