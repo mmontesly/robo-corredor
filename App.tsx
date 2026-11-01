@@ -54,7 +54,10 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean) => ({ y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, note: '' });
+  const fresh = (race: boolean) => ({ y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
+  const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
+  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
   const g = useRef(fresh(false));
   const roomRef = useRef<Room | null>(null);
   const [lv, setLv] = useState<{ view: 'choose' | 'join' | 'room' | 'wait'; code: string; err: string; ids: number[] }>({ view: 'choose', code: '', err: '', ids: [] });
@@ -73,12 +76,13 @@ export default function App() {
     if (m.t === 'lobby') setLv(v => ({ ...v, ids: m.ids }));
     else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0);
     else if (s.online && m.t === 's' && s.others[m.i]) { s.others[m.i].d = m.d; s.others[m.i].y = m.y; s.others[m.i].seen = Date.now(); }
-    else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; force(n => n + 1); }
-    else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `Robô ${PNAME[m.i]} saiu`; force(n => n + 1); } }
+    else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; publish(); }
+    else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone }; force(n => n + 1); }
+    else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `Robô ${PNAME[m.i]} saiu`; publish(); } }
   };
   const onClose = () => {
     const s = g.current;
-    if (s.online) { Object.values(s.others).forEach(o => { o.gone = true; }); s.note = 'A sala fechou. Continue correndo!'; force(n => n + 1); }
+    if (s.online) { Object.values(s.others).forEach(o => { o.gone = true; }); s.note = 'A sala fechou. Continue correndo!'; roomRef.current = null; publish(); force(n => n + 1); return; }
     else setLv({ view: 'choose', code: '', err: 'A sala fechou.', ids: [] });
     roomRef.current = null;
   };
@@ -92,7 +96,7 @@ export default function App() {
       if (mode === 'podium') roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: 0 });
       let ch = false;
       for (const [k, o] of Object.entries(s.others)) if (!o.gone && o.fin === undefined && Date.now() - (o.seen ?? 0) > 6000) { o.gone = true; s.note = `Robô ${PNAME[Number(k)]} saiu`; ch = true; }
-      if (ch) force(n => n + 1);
+      if (ch) publish();
     }, 700);
     const bye = () => roomRef.current?.close();
     if (Platform.OS === 'web') window.addEventListener('pagehide', bye);
@@ -127,7 +131,7 @@ export default function App() {
       s.dist += s.speed * dt;
       if (s.online) {
         s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y }); }
-        if (s.dist >= FINISH) { s.myTime = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
+        if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
         s.place = 1 + s.rivals.filter(r => r.d >= s.dist).length;
@@ -176,10 +180,6 @@ export default function App() {
 
   const s = g.current;
   const place = s.online ? 1 + Object.values(s.others).filter(o => !o.gone && (o.fin !== undefined || o.d > s.dist)).length : 1 + s.rivals.filter(r => r.d > s.dist).length;
-  const ranking = () => {
-    const all = [{ i: s.me, d: s.dist, fin: mode === 'podium' ? s.myTime : undefined as number | undefined, gone: false }, ...Object.entries(s.others).map(([i, o]) => ({ i: Number(i), ...o }))];
-    return all.sort((a, b) => (a.fin ?? 1e9) - (b.fin ?? 1e9) || b.d - a.d);
-  };
   const ord = ['1º', '2º', '3º', '4º'];
   const gearRot = `${(s.t * 360) % 360}deg`;
   return (
@@ -277,19 +277,23 @@ export default function App() {
       {mode !== 'play' && mode !== 'lobby' && mode !== 'count' && (
         <View style={st.overlay} pointerEvents="box-none">
           <View style={st.card}>
-            {mode === 'podium' && s.online ? (<>
-              <Text style={st.title}>{ranking()[0].i === s.me ? 'Você venceu! 🏆' : 'Que corrida! 🎉'}</Text>
+            {mode === 'podium' && s.online ? (() => {
+              const pod = s.pod ?? { order: [], gone: [] };
+              const pending = s.ids.filter(i => !pod.order.includes(i) && !pod.gone.includes(i));
+              const list = [...pod.order.map((i, k) => ({ i, label: `${k + 1}º` })), ...pending.map(i => ({ i, label: '…' })), ...pod.gone.map(i => ({ i, label: 'saiu' }))];
+              const vis = [list[1], list[0], list[2], list[3]]; const h = [70, 100, 50, 35];
+              return (<>
+              <Text style={st.title}>{pod.order[0] === s.me ? 'Você venceu! 🏆' : pod.order.length ? 'Que corrida! 🎉' : 'Chegou! 🏁'}</Text>
               <View style={st.podium}>
-                {(() => { const r = ranking(); const order = [r[1], r[0], r[2], r[3]]; const h = [70, 100, 50, 35];
-                  return order.map((p, k) => p && (
+                {vis.map((p, k) => p && (
                     <View key={p.i} style={{ alignItems: 'center', marginHorizontal: 4 }}>
                       <Text style={{ fontSize: 14, fontWeight: '800', color: '#023047' }}>{p.i === s.me ? 'Você' : PNAME[p.i]}</Text>
-                      <View style={[st.mini, { backgroundColor: PCOL[p.i], opacity: p.gone ? 0.3 : 1 }]} />
-                      <View style={[st.step, { height: h[k], width: 60 }]}><Text style={st.stepText}>{p.fin === undefined && !p.gone ? '…' : ['2º', '1º', '3º', '4º'][k]}</Text></View>
-                    </View>)); })()}
+                      <View style={[st.mini, { backgroundColor: PCOL[p.i], opacity: p.label === 'saiu' ? 0.3 : 1 }]} />
+                      <View style={[st.step, { height: h[k], width: 60 }]}><Text style={[st.stepText, p.label === 'saiu' && { fontSize: 14 }]} testID={'place-' + p.i}>{p.label}</Text></View>
+                    </View>))}
               </View>
-              <Text style={st.sub}>{Object.values(s.others).some(o => o.fin === undefined && !o.gone) ? 'Esperando os outros robôs chegarem…' : `Você pegou ${s.score} bateria${s.score === 1 ? '' : 's'}!`}</Text>
-            </>) : mode === 'podium' ? (<>
+              <Text style={st.sub}>{pending.length ? 'Esperando os outros robôs chegarem…' : `Você pegou ${s.score} bateria${s.score === 1 ? '' : 's'}!`}</Text>
+              </>); })() : mode === 'podium' ? (<>
               <Text style={st.title}>{s.place === 1 ? 'Nodex venceu! 🏆' : 'Que corrida! 🎉'}</Text>
               <View style={st.podium}>
                 {(() => { const list = [{ name: 'Nodex', color: '#4CC9F0', d: s.dist + (s.place === 1 ? 1e6 : 0) }, ...s.rivals].sort((x, y) => y.d - x.d); const top = list.slice(0, 3); const order = [top[1], top[0], top[2]]; const h = [70, 100, 50];
