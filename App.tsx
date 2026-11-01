@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } from './online';
 
 type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo';
-type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean };
+type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean; dyn?: boolean };
 type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade';
 type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; tip: string };
 const WORLDS: Record<WorldId, World> = {
@@ -16,11 +16,13 @@ const WORLDS: Record<WorldId, World> = {
 };
 const WORLD_IDS = Object.keys(WORLDS) as WorldId[];
 const hill = (w: World, wx: number) => w.hills ? 55 + 35 * Math.sin(wx / 260) + 15 * Math.sin(wx / 97) : 0;
-const pickKind = (r: number, w: World): Kind => w.ice ? (r < 0.3 ? 'gear' : r < 0.5 ? 'oil' : r < 0.72 ? 'battery' : r < 0.85 ? 'coat' : 'igloo') : (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery');
+const pickKind = (r: number, w: World): Kind => w.ice ? (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery') : (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery');
 type Mode = 'menu' | 'play' | 'over' | 'podium' | 'lobby' | 'count';
 const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0'];
 const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde'];
-type Other = { d: number; y: number; fin?: number; gone?: boolean; seen?: number; z?: boolean; c?: boolean };
+// Apelidos só de uma lista pronta (sem texto livre = sem nomes reais/dados pessoais).
+const NICKS = ['Raio', 'Foguete', 'Turbo', 'Faísca', 'Pipoca', 'Trovão', 'Cometa', 'Bolinha', 'Pulinho', 'Parafuso', 'Estrela', 'Biscoito'];
+type Other = { dd?: number; dy?: number; v?: number; lt?: number; d: number; y: number; fin?: number; gone?: boolean; seen?: number; z?: boolean; c?: boolean };
 function makeTrack(seed: number, w: World) {
   const r = rng(seed); const out: { wx: number; kind: Kind; y: number }[] = [];
   for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const kind = pickKind(r(), w); out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); if (kind === 'igloo') wx += 80; }
@@ -84,12 +86,17 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, prepScarf: -1, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
   const g = useRef(fresh(false));
   const roomRef = useRef<Room | null>(null);
+  const [nick, setNick] = useState(() => NICKS[Math.floor(Math.random() * NICKS.length)]);
+  const nickRef = useRef(nick); nickRef.current = nick;
+  const nicksRef = useRef<Record<number, string>>({});
+  const nameOf = (i: number) => nicksRef.current[i] ?? PNAME[i];
+  const okNick = (n: any) => typeof n === 'string' && NICKS.includes(n);
   const [lv, setLv] = useState<{ view: 'choose' | 'join' | 'room' | 'wait'; code: string; err: string; ids: number[] }>({ view: 'choose', code: '', err: '', ids: [] });
   const [count, setCount] = useState(3);
   const leaveRoom = () => { roomRef.current?.close(); roomRef.current = null; };
@@ -103,13 +110,15 @@ export default function App() {
   };
   const onMsg = (m: Msg) => {
     const s = g.current;
-    if (m.t === 'lobby') { setLv(v => ({ ...v, ids: m.ids })); if (roomRef.current?.isHost) roomRef.current.send({ t: 'world', w: worldRef.current }); }
+    if (m.t === 'nick') { if (okNick(m.n) && m.i >= 0 && m.i < 4) { nicksRef.current = { ...nicksRef.current, [m.i]: m.n }; if (roomRef.current?.isHost) roomRef.current.send({ t: 'nicks', map: nicksRef.current }); force(n => n + 1); } return; }
+    if (m.t === 'nicks') { const c: Record<number, string> = {}; for (const [k, v] of Object.entries(m.map || {})) if (okNick(v)) c[Number(k)] = v as string; nicksRef.current = c; force(n => n + 1); return; }
+    if (m.t === 'lobby') { setLv(v => ({ ...v, ids: m.ids })); if (roomRef.current?.isHost) { const keep: Record<number, string> = {}; m.ids.forEach(i => { if (nicksRef.current[i]) keep[i] = nicksRef.current[i]; }); nicksRef.current = keep; roomRef.current.send({ t: 'world', w: worldRef.current }); roomRef.current.send({ t: 'nicks', map: keep }); } }
     else if (m.t === 'world') { if (WORLDS[m.w as WorldId]) setWorld(m.w as WorldId); }
     else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0, (WORLDS[m.w as WorldId] ? m.w : 'fabrica') as WorldId);
-    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; o.d = m.d; o.y = m.y; o.z = m.z; o.c = m.c; o.seen = Date.now(); }
+    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.z = m.z; o.c = m.c; o.seen = Date.now(); }
     else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; publish(); }
     else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone }; force(n => n + 1); }
-    else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `Robô ${PNAME[m.i]} saiu`; publish(); } }
+    else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `${nameOf(m.i)} saiu`; publish(); } }
   };
   const onClose = () => {
     const s = g.current;
@@ -118,15 +127,15 @@ export default function App() {
     roomRef.current = null;
   };
   const errText = (e: any) => e === 'full' ? 'Essa sala está cheia ou já começou.' : e === 'peer-unavailable' || e === 'timeout' ? 'Sala não encontrada. Confira o número.' : 'Sem conexão. Tente de novo.';
-  const hostRoom = async () => { setLv({ view: 'wait', code: '', err: '', ids: [] }); try { const r = await createRoom({ onMsg, onClose }); roomRef.current = r; setLv({ view: 'room', code: r.code, err: '', ids: [0] }); } catch (e) { setLv({ view: 'choose', code: '', err: errText(e), ids: [] }); } };
-  const join = async (code: string) => { setLv(v => ({ ...v, view: 'wait', err: '' })); try { const r = await joinRoom(code, { onMsg, onClose }); roomRef.current = r; setLv(v => ({ view: 'room', code, err: '', ids: v.ids.length ? v.ids : [0, r.me] })); } catch (e) { setLv({ view: 'join', code: '', err: errText(e), ids: [] }); } };
+  const hostRoom = async () => { setLv({ view: 'wait', code: '', err: '', ids: [] }); try { const r = await createRoom({ onMsg, onClose }); roomRef.current = r; nicksRef.current = { 0: nickRef.current }; setLv({ view: 'room', code: r.code, err: '', ids: [0] }); } catch (e) { setLv({ view: 'choose', code: '', err: errText(e), ids: [] }); } };
+  const join = async (code: string) => { setLv(v => ({ ...v, view: 'wait', err: '' })); try { const r = await joinRoom(code, { onMsg, onClose }); roomRef.current = r; r.send({ t: 'nick', i: r.me, n: nickRef.current }); setLv(v => ({ view: 'room', code, err: '', ids: v.ids.length ? v.ids : [0, r.me] })); } catch (e) { setLv({ view: 'join', code: '', err: errText(e), ids: [] }); } };
   const hostStart = () => { const r = roomRef.current; if (!r?.isHost) return; const ids = r.ids(); if (ids.length < 2) return; r.lock(); const seed = Math.floor(Math.random() * 1e9); r.send({ t: 'start', seed, ids, w: worldRef.current }); beginOnline(seed, ids, 0, worldRef.current); };
   useEffect(() => {
     const iv = setInterval(() => {
       const s = g.current; if (!s.online) return;
       if (mode === 'podium') roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: 0 });
       let ch = false;
-      for (const [k, o] of Object.entries(s.others)) if (!o.gone && o.fin === undefined && Date.now() - (o.seen ?? 0) > 6000) { o.gone = true; s.note = `Robô ${PNAME[Number(k)]} saiu`; ch = true; }
+      for (const [k, o] of Object.entries(s.others)) if (!o.gone && o.fin === undefined && Date.now() - (o.seen ?? 0) > 6000) { o.gone = true; s.note = `${nameOf(Number(k))} saiu`; ch = true; }
       if (ch) publish();
     }, 700);
     const bye = () => roomRef.current?.close();
@@ -161,6 +170,11 @@ export default function App() {
         if (inIgloo) sfx(700, 0.2, 'triangle'); else if (s.coat) { s.coat = false; sfx(600, 0.2, 'triangle'); } else { s.frozen = 1.5; s.slow = 0; sfx(300, 0.4, 'sine'); buzz(80); }
         for (const r of s.rivals) r.frozen = Math.random() < 0.55 ? 1.5 : 0;
       }
+      if (W.ice && mode === 'play') { // antes de cada tempestade: sempre uma roupinha e um iglu no caminho
+        const left = s.stormAt - s.t;
+        if (left < 4.5 && s.prepScarf !== s.stormAt) { s.prepScarf = s.stormAt; s.objs.push({ id: 100000 + s.id++, x: width + 30, kind: 'coat', y: 0, dyn: true }); }
+        if (left < 1.4 && s.prepIgloo !== s.stormAt) { s.prepIgloo = s.stormAt; s.objs = s.objs.filter(o => !(o.kind !== 'battery' && o.kind !== 'coat' && o.x > 0 && o.x < 60 + s.speed * 1.6 + 120)); s.objs.push({ id: 100000 + s.id++, x: 60 - 25 + Math.max(s.speed, 150) * left, kind: 'igloo', y: 0, dyn: true }); }
+      }
       let target: number;
       if (s.race) {
         s.slow = Math.max(0, s.slow - dt); s.boost = Math.max(0, s.boost - dt);
@@ -171,6 +185,11 @@ export default function App() {
       else if (W.ice) s.speed += (target - s.speed) * Math.min(1, dt * 1.5); // escorrega no gelo
       else s.speed = target;
       s.dist += s.speed * dt;
+      if (s.online) for (const o of Object.values(s.others)) { // suaviza: prevê com a velocidade e aproxima devagar
+        if (o.fin === undefined) o.d += (o.v ?? 0) * dt;
+        o.dd = o.dd === undefined ? o.d : o.dd + (o.d - o.dd) * Math.min(1, dt * 8);
+        o.dy = o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
+      }
       if (s.online) {
         s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y, z: s.frozen > 0, c: s.coat }); }
         if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
@@ -191,7 +210,7 @@ export default function App() {
       const rx = 60;
       for (const o of s.objs) {
         const car = W.cars && (o.kind === 'gear' || o.kind === 'oil');
-        if (s.online && !o.live) { o.x = 60 + s.track[o.id].wx - s.dist; if (car && o.x < width) o.live = true; }
+        if (s.online && !o.live && !o.dyn) { o.x = 60 + s.track[o.id].wx - s.dist; if (car && o.x < width) o.live = true; }
         else o.x -= (s.speed + (car ? 130 : 0)) * dt;
         const w = o.kind === 'oil' ? 60 : o.kind === 'igloo' ? 90 : 40;
         const overlapX = o.x < rx + ROBOT - 10 && o.x + w > rx + 10;
@@ -266,11 +285,11 @@ export default function App() {
             <Text key={o.id} style={[st.battery, { left: o.x, bottom: b + o.y }]}>🔋</Text>
           ); })}
           {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT, bottom: gy(FINISH) }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
-          {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const x = 60 + (o.d - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
-            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(o.d) + o.y + i * 5, opacity: 0.85 }]}>
+          {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const od = o.dd ?? o.d; const x = 60 + (od - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
+            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(od) + (o.dy ?? o.y) + i * 5, opacity: 0.85 }]}>
               <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
               <View style={[st.head, { backgroundColor: PCOL[i] }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{PNAME[i]}</Text><Extras z={o.z} c={o.c} />
+              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} />
             </View>); })}
           {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist); if (x < -80 || x > width + 80) return null; return (
             <View key={r.name} style={[st.robot, { left: x, bottom: gy(r.d) + 4 + i * 6, opacity: 0.9, transform: [{ scale: 0.85 }] }]}>
@@ -311,6 +330,10 @@ export default function App() {
             <Text style={st.title}>Corrida online 👥</Text>
             {lv.view === 'choose' && (<>
               <Text style={st.sub}>Até 4 robôs! Uma pessoa cria a sala e as outras entram com o número.</Text>
+              <Text style={st.wname}>Escolha seu apelido:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 8 }}>
+                {NICKS.map(n => <Pressable key={n} accessibilityLabel={'apelido ' + n} onPress={() => setNick(n)} style={[st.chip, nick === n && st.chipOn]}><Text style={st.chipText}>{n}</Text></Pressable>)}
+              </View>
               <Pressable style={st.btn} onPress={hostRoom}><Text style={st.btnText}>➕ Criar sala</Text></Pressable>
               <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => setLv({ view: 'join', code: '', err: '', ids: [] })}><Text style={st.btnText}>🔢 Entrar</Text></Pressable>
             </>)}
@@ -330,7 +353,7 @@ export default function App() {
               <Text style={st.sub}>Número da sala:</Text>
               <Text style={st.codeBox}>{lv.code.split('').join(' ')}</Text>
               <View style={{ flexDirection: 'row', marginVertical: 12 }}>
-                {[0, 1, 2, 3].map(i => <View key={i} style={[st.mini, { marginHorizontal: 6, backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} />)}
+                {[0, 1, 2, 3].map(i => <View key={i} style={{ alignItems: 'center', width: 72 }}><View style={[st.mini, { backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} /><Text style={{ fontSize: 13, fontWeight: '800', color: '#023047' }} testID={'nick-' + i}>{lv.ids.includes(i) ? nameOf(i) + (i === roomRef.current?.me ? ' (você)' : '') : '—'}</Text></View>)}
               </View>
               <Text style={st.sub}>{lv.ids.length}/{MAX} robôs na sala</Text>
               <Picker off={!roomRef.current?.isHost} />
@@ -356,7 +379,7 @@ export default function App() {
               <View style={st.podium}>
                 {vis.map((p, k) => p && (
                     <View key={p.i} style={{ alignItems: 'center', marginHorizontal: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#023047' }}>{p.i === s.me ? 'Você' : PNAME[p.i]}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#023047' }}>{p.i === s.me ? `Você (${nameOf(p.i)})` : nameOf(p.i)}</Text>
                       <View style={[st.mini, { backgroundColor: PCOL[p.i], opacity: p.label === 'saiu' ? 0.3 : 1 }]} />
                       <View style={[st.step, { height: h[k], width: 60 }]}><Text style={[st.stepText, p.label === 'saiu' && { fontSize: 14 }]} testID={'place-' + p.i}>{p.label}</Text></View>
                     </View>))}
@@ -440,5 +463,8 @@ const st = StyleSheet.create({
   snow: { ...(StyleSheet.absoluteFill as any), backgroundColor: 'rgba(255,255,255,0.45)', alignItems: 'center', justifyContent: 'center' },
   snowText: { fontSize: 48, textAlign: 'center', lineHeight: 90 },
   warn: { position: 'absolute', top: 140, left: 16, right: 16, textAlign: 'center', fontSize: 24, fontWeight: '900', color: '#0077B6', backgroundColor: '#FFFFFFDD', borderRadius: 16, padding: 10 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, margin: 3, borderRadius: 18, backgroundColor: '#F1F3F5', borderWidth: 2, borderColor: 'transparent' },
+  chipOn: { borderColor: '#FB5607', backgroundColor: '#FFF3E0' },
+  chipText: { fontSize: 15, fontWeight: '800', color: '#023047' },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
