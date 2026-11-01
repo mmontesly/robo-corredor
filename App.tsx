@@ -69,7 +69,8 @@ const newRivals = (): Rival[] => [
 ];
 
 const GROUND = 120, ROBOT = 56, GRAV = 2600, JUMP = 980;
-const BEST_KEY = 'robo-corredor-best';
+const BEST_KEY = 'robo-corredor-best-m'; // recorde em metros
+const meters = (d: number) => Math.floor(d / 10);
 
 const store = {
   get(): number { try { return Number((globalThis as any).localStorage?.getItem(BEST_KEY)) || 0; } catch { return 0; } },
@@ -248,7 +249,7 @@ export default function App() {
       if (s.frozen > 0) s.speed = 0;
       else if (W.ice) s.speed += (target - s.speed) * Math.min(1, dt * 1.5); // escorrega no gelo
       else s.speed = target;
-      if (W.space) { if (spaceStep(s, dt) === 'over') { const b = Math.max(store.get(), s.score); store.set(b); setBest(b); setMode('over'); force(n => n + 1); return; } } else s.dist += s.speed * dt;
+      if (W.space) { if (spaceStep(s, dt) === 'over') { const b = Math.max(store.get(), meters(s.dist)); store.set(b); setBest(b); setMode('over'); force(n => n + 1); return; } } else s.dist += s.speed * dt;
       if (s.online) for (const o of Object.values(s.others)) { // suaviza: prevê com a velocidade e aproxima devagar
         if (o.fin === undefined) o.d += (o.v ?? 0) * dt;
         o.dd = o.dd === undefined ? o.d : o.dd + (o.d - o.dd) * Math.min(1, dt * 8);
@@ -296,7 +297,7 @@ export default function App() {
         } else if (W.lava && o.kind === 'gear' || s.y < (o.kind === 'oil' && !W.cars ? 10 : 34)) {
           sfx(200, 0.3, 'sine'); buzz(120);
           if (s.race) { o.taken = true; s.slow = 1; continue; }
-          const b = Math.max(store.get(), s.score); store.set(b); setBest(b);
+          const b = Math.max(store.get(), meters(s.dist)); store.set(b); setBest(b);
           setMode('over'); force(n => n + 1); return;
         }
       }
@@ -501,7 +502,7 @@ export default function App() {
             <Text style={st.place}>{ord[place - 1]} lugar</Text>
             <View style={st.bar}><View style={[st.barFill, { width: `${Math.min(100, (s.dist / FINISH) * 100)}%` }]} /></View>
           </View>
-        ) : <Text style={st.best}>Recorde: {best}</Text>}
+        ) : <View style={{ flex: 1, alignItems: 'center' }}><Text style={st.meters} testID="meters">📏 {meters(s.dist)} m</Text><Text style={[st.best, { flex: 0 }]}>Recorde: {best} m</Text></View>}
         {!!s.note && mode === 'play' && <Text style={st.note}>{s.note}</Text>}
         <Pressable style={st.mute} onPress={() => setMuted(m => !m)} accessibilityLabel={muted ? 'Ligar som' : 'Desligar som'}>
           <Text style={{ fontSize: 30 }}>{muted ? '🔇' : '🔊'}</Text>
@@ -632,7 +633,7 @@ export default function App() {
               {!!story && !!storyMsg && <Text style={[st.sub, { color: '#2B8A3E', fontWeight: '900', marginTop: 0 }]}>{storyMsg}</Text>}
             </>) : (<>
               <Text style={st.title}>{mode === 'menu' ? 'Nodex: Robô Corredor' : 'Tente de novo! 😄'}</Text>
-              <Text style={st.sub}>{mode === 'menu' ? `Toque para o Nodex pular. ${WORLDS[world].tip} Baterias dão turbo!` : `O Nodex pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best}`}</Text>
+              <Text style={st.sub}>{mode === 'menu' ? `Toque para o Nodex pular. ${WORLDS[world].tip} Baterias dão turbo!` : `O Nodex correu ${meters(s.dist)} m e pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best} m`}</Text>
             </>)}
             {mode === 'menu' && <Picker />}
             {mode === 'podium' && !!story ? (<>
@@ -743,5 +744,6 @@ const st = StyleSheet.create({
   bannerText: { fontSize: 19, fontWeight: '900', color: '#023047', textAlign: 'center' },
   skinInfo: { fontSize: 15, fontWeight: '800', color: '#9C36B5', textAlign: 'center', marginBottom: 6 },
   skinLabel: { fontSize: 9.5, lineHeight: 11, fontWeight: '800', color: '#023047', textAlign: 'center', paddingHorizontal: 2 },
+  meters: { fontSize: 30, fontWeight: '900', color: '#FB5607' },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
