@@ -5,7 +5,7 @@ import { RobotBody, SKINS, FREE_SKINS } from './skins';
 import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } from './online';
 
 type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo' | 'ans';
-type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean; dyn?: boolean; label?: string; color?: string; ok?: boolean; q?: number };
+type Obj = { h?: number; fly?: boolean; id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean; dyn?: boolean; label?: string; color?: string; ok?: boolean; q?: number };
 type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade' | 'vulcao' | 'matematica' | 'portugues' | 'cores' | 'espaco';
 type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; lava?: boolean; space?: boolean; quiz?: 'math' | 'pt' | 'cor'; tip: string };
 const WORLDS: Record<WorldId, World> = {
@@ -246,11 +246,11 @@ export default function App() {
         s.projs = s.projs.filter(pj => pj.life > 0);
         if (!W.space) for (const pd of s.puddles) for (const k of racers(s)) { if (k === pd.owner || pd.hit.includes(k) || k[0] === 'p') continue; const d = posOf(s, k); if (d + ROBOT > pd.wx + 20 && d < pd.wx + 40 && !(k === 'me' && s.y > 10)) { pd.hit.push(k); hitKey(s, k); } }
         s.puddles = s.puddles.filter(pd => pd.wx > s.dist - 600);
-      } else { // Sem fim: fica mais rápido a cada 100 m (até 8 níveis)
-        const lvl = Math.min(8, Math.floor(meters(s.dist) / 100));
+      } else { // Sem fim: fica mais rápido a cada 100 m (até 18 níveis)
+        const lvl = Math.min(18, Math.floor(meters(s.dist) / 100));
         if (lvl > s.lvl) { s.lvl = lvl; s.lvlPop = 1.6; sfx(784, 0.12, 'triangle'); setTimeout(() => sfx(1046, 0.18, 'triangle'), 120); buzz(40); }
         s.lvlPop = Math.max(0, s.lvlPop - dt);
-        target = 260 * (1 + 0.12 * lvl) + Math.min(20, s.t);
+        target = 300 * (1 + 0.09 * lvl) + Math.min(20, s.t);
       }
       if (s.frozen > 0) s.speed = 0;
       else if (W.ice) s.speed += (target - s.speed) * Math.min(1, dt * 1.5); // escorrega no gelo
@@ -275,7 +275,22 @@ export default function App() {
       s.vy -= GRAV * dt; s.y = Math.max(0, s.y + s.vy * dt); if (s.y === 0) s.vy = 0;
       s.next -= dt;
       if (s.online) s.next = 99;
-      if (s.next <= 0) {
+      if (s.next <= 0 && !s.race && !s.online) { // Sem fim: padrões variados, sempre possíveis
+        const L = s.lvl, x0 = width + 40, R = Math.random(); let extra = 0;
+        const pBat = Math.max(0.07, 0.28 - 0.012 * L);
+        if (R < pBat) s.objs.push({ id: s.id++, x: x0, kind: 'battery', y: Math.random() < 0.5 ? 20 : 130 });
+        else {
+          const opts: string[] = ['gear', 'oil']; if (L >= 1) opts.push('tall'); if (L >= 2) opts.push('fly'); if (L >= 3) opts.push('double');
+          const pick = opts[Math.floor(Math.random() * opts.length)];
+          if (pick === 'oil') s.objs.push({ id: s.id++, x: x0, kind: 'oil', y: 0 });
+          else if (pick === 'tall') s.objs.push({ id: s.id++, x: x0, kind: 'gear', y: 0, h: 2 });
+          else if (pick === 'fly') { s.objs.push({ id: s.id++, x: x0, kind: 'gear', y: 76, fly: true }); extra = 0.15; }
+          else if (pick === 'double') { s.objs.push({ id: s.id++, x: x0, kind: 'gear', y: 0 }, { id: s.id++, x: x0 + 46, kind: 'gear', y: 0 }); extra = 46 / Math.max(s.speed, 1); }
+          else s.objs.push({ id: s.id++, x: x0, kind: 'gear', y: 0 });
+        }
+        // tempo mínimo entre obstáculos = pousar + pular de novo (0,754 s no ar) com folga
+        s.next = Math.max((0.55 + Math.random() * 0.75) * (1 - 0.025 * L), 0.9) + extra;
+      } else if (s.next <= 0) {
         const kind = pickKind(Math.random(), W);
         s.objs.push({ id: s.id++, x: width + 40, kind, y: kind === 'battery' ? (Math.random() < 0.5 ? 20 : 130) : 0 });
         s.next = Math.max((0.7 + Math.random() * 0.9) * (1.2 - 0.06 * s.diff) - (s.race ? Math.min(s.t / 120, 0.3) : 0), 560 / Math.max(s.speed, 1)); // sempre dá para pular
@@ -296,11 +311,12 @@ export default function App() {
           else { s.quizRes = 'Ops! Na próxima você acerta 😊'; sfx(330, 0.2, 'sine'); }
           continue;
         }
+        if (o.fly) { if (s.y + ROBOT > o.y + 8 && s.y < o.y + 34) { sfx(200, 0.3, 'sine'); buzz(120); const b = Math.max(store.get(), meters(s.dist)); store.set(b); setBest(b); setMode('over'); force(n => n + 1); return; } continue; }
         if (W.lava && o.kind === 'gear') { const by = Math.abs(Math.sin(s.t * 3.2 + o.id)) * 70; if (!(s.y < by + 32 && s.y + ROBOT > by + 4)) continue; }
         if (o.kind === 'coat') { if (s.y < 60) { o.taken = true; s.coat = true; sfx(1000, 0.15, 'triangle'); } continue; }
         if (o.kind === 'battery') {
           if (s.y + ROBOT > o.y && s.y < o.y + 40) { o.taken = true; s.score++; s.boost = 1.2; sfx(880, 0.1, 'triangle'); }
-        } else if (W.lava && o.kind === 'gear' || s.y < (o.kind === 'oil' && !W.cars ? 10 : 34)) {
+        } else if (W.lava && o.kind === 'gear' || s.y < (o.kind === 'oil' && !W.cars ? 10 : o.h === 2 ? 70 : 34)) {
           sfx(200, 0.3, 'sine'); buzz(120);
           if (s.race) { o.taken = true; s.slow = 1; continue; }
           const b = Math.max(store.get(), meters(s.dist)); store.set(b); setBest(b);
@@ -476,6 +492,10 @@ export default function App() {
             <View key={o.id} style={[st.lava, { left: o.x, bottom: b + Math.abs(Math.sin(s.t * 3.2 + o.id)) * 70 }]}><View style={st.lavaEye} /><View style={st.lavaEye} /></View>
           ) : o.kind === 'ans' ? (
             <View key={o.id} style={[st.bubble, { left: o.x - 4, bottom: b + o.y, backgroundColor: o.color }]}><Text style={st.bubbleText}>{o.label}</Text></View>
+          ) : o.kind === 'gear' && o.fly ? (
+            <View key={o.id} style={{ position: 'absolute', left: o.x, bottom: b - 4, width: 44, height: 120, alignItems: 'center' }}><View style={{ position: 'absolute', bottom: 0, width: 36, height: 8, borderRadius: 6, backgroundColor: '#0003' }} /><View style={{ position: 'absolute', bottom: o.y - 4, width: 46, height: 46, borderRadius: 23, backgroundColor: '#FFB4A2', borderWidth: 3, borderColor: '#E5383B', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 30, transform: [{ rotate: gearRot }] }}>⚙️</Text></View></View>
+          ) : o.kind === 'gear' && o.h === 2 ? (
+            <View key={o.id} style={{ position: 'absolute', left: o.x, bottom: b - 4, alignItems: 'center' }}><Text style={{ fontSize: 40, lineHeight: 42 }}>{W.a}</Text><Text style={{ fontSize: 40, lineHeight: 42 }}>{W.a}</Text></View>
           ) : o.kind === 'gear' ? (
             <Text key={o.id} style={[st.gear, { left: o.x, bottom: b - 4, fontSize: W.cars ? 44 : 40, transform: W.roll ? [{ rotate: `-${gearRot}` }] : [] }]}>{W.a}</Text>
           ) : o.kind === 'coat' ? (
