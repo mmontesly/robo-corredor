@@ -642,7 +642,7 @@ export default function App() {
             </>) : (<>
             {mode === 'menu' && <>
               <Pressable style={[st.mbtn, { backgroundColor: '#F06595' }]} onPress={() => { setSkinInfo(''); setMode('skins'); }} accessibilityLabel="skins"><Text style={st.btnText}>🎭 Skins</Text></Pressable>
-              <Pressable style={[st.mbtn, { backgroundColor: '#9775FA' }]} onPress={() => setMode('story')} accessibilityLabel="modo historia"><Text style={st.btnText}>📖 História</Text></Pressable>
+              <Pressable style={[st.mbtn, { backgroundColor: '#9775FA' }]} onPress={() => setMode('story')} accessibilityLabel="modo historia"><Text style={st.btnText}>📖 Modo História</Text></Pressable>
             </>}
             {onlineAvailable() && <Pressable style={[st.mbtn, { backgroundColor: '#FB5607' }]} onPress={() => { leaveRoom(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Online</Text></Pressable>}
             <Pressable style={[st.mbtn, { backgroundColor: '#06D6A0' }]} onPress={() => { leaveRoom(); start(true); }}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
