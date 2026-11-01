@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 export type Msg =
   | { t: 'hello'; you: number } | { t: 'lobby'; ids: number[] } | { t: 'start'; seed: number; ids: number[]; w: string } | { t: 'world'; w: string }
-  | { t: 's'; i: number; d: number; y: number; z?: boolean; c?: boolean; g?: boolean } | { t: 'fin'; i: number; time: number } | { t: 'left'; i: number } | { t: 'podium'; order: number[]; gone: number[] } | { t: 'full' } | { t: 'nick'; i: number; n: string } | { t: 'nicks'; map: Record<number, string> };
+  | { t: 's'; i: number; d: number; y: number; z?: boolean; c?: boolean; g?: boolean; sp?: boolean } | { t: 'fin'; i: number; time: number } | { t: 'left'; i: number } | { t: 'podium'; order: number[]; gone: number[] } | { t: 'full' } | { t: 'pw'; i: number; k: 'rocket' | 'oil'; to: number; at: number } | { t: 'nick'; i: number; n: string } | { t: 'nicks'; map: Record<number, string> };
 export type Room = { code: string; me: number; isHost: boolean; send: (m: Msg) => void; close: () => void; ids: () => number[]; lock: () => void };
 export type Handlers = { onMsg: (m: Msg) => void; onClose: () => void };
 
