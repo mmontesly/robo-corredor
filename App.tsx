@@ -5,8 +5,8 @@ import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } 
 
 type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo' | 'ans';
 type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean; dyn?: boolean; label?: string; color?: string; ok?: boolean; q?: number };
-type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade' | 'vulcao' | 'matematica' | 'portugues' | 'cores';
-type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; lava?: boolean; quiz?: 'math' | 'pt' | 'cor'; tip: string };
+type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade' | 'vulcao' | 'matematica' | 'portugues' | 'cores' | 'espaco';
+type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; lava?: boolean; space?: boolean; quiz?: 'math' | 'pt' | 'cor'; tip: string };
 const WORLDS: Record<WorldId, World> = {
   fabrica: { emoji: '🏭', name: 'Fábrica', sky: '#FFE8A3', deco: ['#8ECAE6', '#A0C4FF', '#BDB2FF', '#9BF6FF'], ground: '#6C757D', top: '#FB8500', belt: '▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸', a: '⚙️', b: '', puddle: '#1D3557', roll: true, tip: 'Pule as engrenagens e o óleo!' },
   gelo: { emoji: '❄️', name: 'Gelo', sky: '#DFF6FF', deco: ['#FFFFFF', '#CAF0F8', '#ADE8F4', '#E9F5FF'], ground: '#BDE0FE', top: '#FFFFFF', belt: '❄  ❄  ❄  ❄  ❄  ❄  ❄  ❄', a: '⚪', b: '🧊', roll: true, ice: true, tip: 'Pule bolas de neve e gelo. Na ❄️ Tempestade, use a 🧣 roupinha ou entre no iglu!' },
@@ -17,6 +17,7 @@ const WORLDS: Record<WorldId, World> = {
   matematica: { emoji: '🔢', name: 'Matemática', sky: '#E7F5FF', deco: ['#A5D8FF', '#FFD8A8', '#B2F2BB', '#FFC9C9'], ground: '#4C6EF5', top: '#FFD43B', belt: '1  2  3  4  5  6  7  8  9', a: '➕', b: '📏', roll: true, quiz: 'math', tip: 'Resolva a conta: pule na bolha certa (em cima) ou passe por baixo para turbo!' },
   portugues: { emoji: '🔤', name: 'Português', sky: '#FFF9DB', deco: ['#FFEC99', '#D0BFFF', '#A5D8FF', '#FFC9C9'], ground: '#AE3EC9', top: '#FFD43B', belt: 'A  E  I  O  U  A  E  I  O', a: '📚', b: '✏️', quiz: 'pt', tip: 'Complete a palavra com a letra certa para ganhar turbo!' },
   cores: { emoji: '🎨', name: 'Cores', sky: '#F8F0FC', deco: ['#FF8787', '#FFD43B', '#69DB7C', '#74C0FC'], ground: '#495057', top: '#F06595', belt: '●  ●  ●  ●  ●  ●  ●  ●', a: '🎨', b: '', puddle: '#F06595', roll: true, quiz: 'cor', tip: 'Pule na bolha da cor pedida para ganhar turbo!' },
+  espaco: { emoji: '🚀', name: 'Espaço', sky: '#14213D', deco: [], ground: '', top: '', belt: '', a: '', b: '', space: true, tip: 'Suba até a Lua! Toque à esquerda ou à direita para pular de asteroide em asteroide.' },
 };
 const WORLD_IDS = Object.keys(WORLDS) as WorldId[];
 const hill = (w: World, wx: number) => w.hills ? 55 + 35 * Math.sin(wx / 260) + 15 * Math.sin(wx / 97) : 0;
@@ -42,8 +43,18 @@ function makeQuiz(kind: 'math' | 'pt' | 'cor', seed: number) {
   const a = Math.floor(r() * COLS.length); let b = Math.floor(r() * (COLS.length - 1)); if (b >= a) b++;
   return { prompt: `Pule no ${COLS[a][0]}!`, ok: COLS[a][1], bad: COLS[b][1], hiOk };
 }
+const ROWS = 40, ROWD = 7000 / ROWS, ROWH = 120;
+// Espaço: cada fileira tem 3 pistas. Sempre há caminho: ou 1 pista vazia (sem meteoro) ou 3 asteroides com 1 meteoro sonolento.
+function spaceRow(seed: number, row: number, diff = 1): string[] {
+  if (row <= 0) return ['p', 'p', 'p'];
+  if (row >= ROWS) return ['p', 'p', 'p'];
+  const r = rng(seed + row * 7919); const a = ['p', 'p', 'p'];
+  if (r() < 0.25 + diff * 0.06) a[Math.floor(r() * 3)] = 'm'; else a[Math.floor(r() * 3)] = '_';
+  if (r() < 0.28) { const o = [0, 1, 2].filter(i => a[i] === 'p'); a[o[Math.floor(r() * o.length)]] = 'b'; }
+  return a;
+}
 const stormPlan = (seed: number) => { const r = rng(seed ^ 0x5eed); return { first: 7 + r() * 2, period: 9 + r() * 2 }; };
-type Rival = { name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
+type Rival = { row?: number; lane?: number; hopT?: number; name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
 type Proj = { d: number; from: string; to: string; life: number };
 type Puddle = { wx: number; owner: string; hit: string[] };
 const POWER_CD = 8;
@@ -103,7 +114,7 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 1, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
@@ -164,6 +175,13 @@ export default function App() {
     if (Platform.OS === 'web') window.addEventListener('pagehide', bye);
     return () => { clearInterval(iv); if (Platform.OS === 'web') window.removeEventListener('pagehide', bye); };
   }, [mode]);
+  const tapRef = useRef<(e?: any) => void>(() => {});
+  useEffect(() => { // web: toque direto no documento (mais confiável que o Pressable com 60 quadros/s)
+    if (Platform.OS !== 'web') return;
+    const h = (ev: PointerEvent) => { const t = ev.target as HTMLElement | null; if (!t?.closest?.('[data-testid=game-area]') || t.closest('[data-testid^=ui-]')) return; tapRef.current({ nativeEvent: { locationX: ev.clientX } }); };
+    document.addEventListener('pointerdown', h); return () => document.removeEventListener('pointerdown', h);
+  }, []);
+  if (Platform.OS === 'web' && typeof window !== 'undefined') (window as any).__nodex = g; // para testes automatizados
   const mutedRef = useRef(false); mutedRef.current = muted;
   const sfx = (f: number, d?: number, t?: string) => { if (!mutedRef.current) beep(f, d, t); };
 
@@ -209,7 +227,7 @@ export default function App() {
         s.slow = Math.max(0, s.slow - dt); s.boost = Math.max(0, s.boost - dt);
         target = 285 * (s.slow > 0 ? 0.5 : 1) * (s.boost > 0 ? 1.35 : 1);
         s.cd = Math.max(0, s.cd - dt);
-        s.rivals.forEach((r, k) => { r.frozen = Math.max(0, (r.frozen ?? 0) - dt); r.slow = Math.max(0, (r.slow ?? 0) - dt); if (!r.frozen) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * (r.slow ? 0.5 : 1) * dt;
+        s.rivals.forEach((r, k) => { r.frozen = Math.max(0, (r.frozen ?? 0) - dt); r.slow = Math.max(0, (r.slow ?? 0) - dt); if (!r.frozen && !W.space) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * (r.slow ? 0.5 : 1) * dt;
           r.cd = (r.cd ?? 6) - dt; if (r.cd <= 0) { r.cd = 7 + Math.random() * 6; const me = 'r' + k; const tgt = ahead(s, me); if (tgt && Math.random() < 0.6) s.projs.push({ d: r.d + 30, from: me, to: tgt, life: 1.5 }); else s.puddles.push({ wx: r.d - 10, owner: me, hit: [] }); } });
         for (const pj of s.projs) { pj.life -= dt; if (!pj.to) continue; pj.d += 900 * dt; if (pj.d >= posOf(s, pj.to)) { hitKey(s, pj.to); pj.life = 0; } }
         s.projs = s.projs.filter(pj => pj.life > 0);
@@ -219,14 +237,14 @@ export default function App() {
       if (s.frozen > 0) s.speed = 0;
       else if (W.ice) s.speed += (target - s.speed) * Math.min(1, dt * 1.5); // escorrega no gelo
       else s.speed = target;
-      s.dist += s.speed * dt;
+      if (W.space) { if (spaceStep(s, dt) === 'over') { const b = Math.max(store.get(), s.score); store.set(b); setBest(b); setMode('over'); force(n => n + 1); return; } } else s.dist += s.speed * dt;
       if (s.online) for (const o of Object.values(s.others)) { // suaviza: prevê com a velocidade e aproxima devagar
         if (o.fin === undefined) o.d += (o.v ?? 0) * dt;
         o.dd = o.dd === undefined ? o.d : o.dd + (o.d - o.dd) * Math.min(1, dt * 8);
-        o.dy = o.y <= 1 ? 0 : o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
+        o.dy = W.space ? o.y : o.y <= 1 ? 0 : o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
       }
       if (s.online) {
-        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
+        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: W.space ? s.sp.lane : s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
         if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
@@ -234,6 +252,7 @@ export default function App() {
         sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60);
         setMode('podium'); force(n => n + 1); return;
       }
+      if (W.space) { force(n => n + 1); raf = requestAnimationFrame(loop); return; }
       s.vy -= GRAV * dt; s.y = Math.max(0, s.y + s.vy * dt); if (s.y === 0) s.vy = 0;
       s.next -= dt;
       if (s.online) s.next = 99;
@@ -298,12 +317,47 @@ export default function App() {
     if (key === 'me') { s.slow = 1; sfx(200, 0.3, 'sine'); buzz(80); }
     else if (key[0] === 'r') { const r = s.rivals[Number(key.slice(1))]; if (r) r.slow = 1; }
   };
-  const tap = () => {
+  const spaceStep = (s: ReturnType<typeof fresh>, dt: number): 'over' | void => {
+    const sp = s.sp;
+    if (sp.hop > 0) {
+      const dur = (s.boost > 0 ? 0.28 : 0.42) * (s.slow > 0 ? 1.7 : 1);
+      sp.hop += dt / dur;
+      if (sp.hop >= 1) {
+        const cell = spaceRow(s.seed, sp.row + 1, s.diff)[sp.tl];
+        sp.hop = 0;
+        if (cell === '_') { sfx(250, 0.25, 'sine'); buzz(60); if (!s.race) return 'over'; s.slow = 0.5; }
+        else {
+          sp.row++; sp.lane = sp.tl;
+          if (cell === 'm') { s.slow = 1; sfx(200, 0.3, 'sine'); buzz(80); }
+          if (cell === 'b' && !s.gotB[sp.row + ':' + sp.lane]) { s.gotB[sp.row + ':' + sp.lane] = true; s.score++; s.boost = 2; sfx(880, 0.1, 'triangle'); }
+          if (!s.race && cell === 'm') return 'over';
+        }
+      }
+    }
+    s.dist = (sp.row + (sp.hop > 0 && spaceRow(s.seed, sp.row + 1, s.diff)[sp.tl] !== '_' ? sp.hop : 0)) * ROWD;
+    s.rivals.forEach(r => {
+      r.row = r.row ?? 0; r.lane = r.lane ?? 1; r.hopT = (r.hopT ?? 0.6) - dt;
+      if (r.hopT <= 0 && !r.slow && !r.frozen) {
+        const next = spaceRow(s.seed, r.row + 1, s.diff); const opts = [Math.max(0, r.lane - 1), Math.min(2, r.lane + 1)];
+        const good = opts.filter(l => next[l] === 'p' || next[l] === 'b'); const pick = good.length && Math.random() < 0.82 ? good[Math.floor(Math.random() * good.length)] : opts[Math.floor(Math.random() * 2)];
+        if (next[pick] === '_') r.hopT = 0.9; else { r.row++; r.lane = pick; if (next[pick] === 'm') r.slow = 1; r.hopT = 0.5 + Math.random() * 0.3 + (r.v < 245 ? 0.08 : 0); }
+      }
+      r.d = r.row * ROWD;
+    });
+  };
+  const tap = (e?: any) => {
     if (mode !== 'play') return;
     const s = g.current; buzz(15);
+    if (WORLDS[s.w].space) {
+      if (s.sp.hop > 0 || s.frozen > 0) return;
+      const lx = e?.nativeEvent?.locationX ?? e?.nativeEvent?.pageX ?? width;
+      const dir = lx < width / 2 ? -1 : 1;
+      s.sp.tl = Math.max(0, Math.min(2, s.sp.lane + dir)); s.sp.hop = 0.0001; sfx(520, 0.1); return;
+    }
     if (s.y === 0 && s.frozen <= 0) { s.vy = JUMP; sfx(440, 0.12); }
   };
 
+  tapRef.current = tap;
   const s = g.current;
   const place = s.online && s.pod?.order.includes(s.me) ? s.pod.order.indexOf(s.me) + 1 : s.online ? 1 + Object.values(s.others).filter(o => !o.gone && (o.fin !== undefined || o.d > s.dist)).length : 1 + s.rivals.filter(r => r.d > s.dist).length;
   const Picker = ({ off }: { off?: boolean }) => (
@@ -323,7 +377,38 @@ export default function App() {
   const warn = W.ice && mode === 'play' && s.stormAt - s.t < 2 && s.stormAt - s.t > 0;
   return (
     <View style={[st.root, { backgroundColor: W.sky }]}>
-      <Pressable style={StyleSheet.absoluteFill} onPressIn={tap} accessibilityLabel="Toque para o Nodex pular">
+      <Pressable style={StyleSheet.absoluteFill} onPressIn={Platform.OS === 'web' ? undefined : tap} testID="game-area" accessibilityLabel="Toque para o Nodex pular">
+        {W.space ? (() => {
+          const camRow = s.sp.row + (s.sp.hop > 0 ? s.sp.hop : 0); const base = 230;
+          const yOf = (rf: number) => base + (rf - camRow) * ROWH;
+          const lx = (l: number) => width * (0.2 + 0.3 * l);
+          const r0 = Math.max(0, Math.floor(camRow) - 2), r1 = Math.min(ROWS, Math.ceil(camRow) + 7);
+          const bot = (key: string, x: number, y: number, color: string, label: string, spin: boolean, sc = 1) => (
+            <View key={key} style={[st.robot, { left: x - ROBOT / 2, bottom: y, transform: [{ scale: sc }, { rotate: spin ? `${(s.t * 720) % 360}deg` : '0deg' }] }]}>
+              <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
+              <View style={[st.head, { backgroundColor: color }]}><View style={st.eye} /><View style={st.eye} /></View>
+              <View style={st.smile} />{!!label && <Text style={[st.tag, { color: '#fff' }]}>{label}</Text>}
+            </View>);
+          const theme = ['#14213D', '#0B3D91', '#5E3023', '#240046', '#1B263B'][s.spTheme ?? 0];
+          const myLane = s.sp.lane + (s.sp.tl - s.sp.lane) * Math.min(1, s.sp.hop);
+          return (
+            <View style={[st.sky, { backgroundColor: theme }]} pointerEvents="none">
+              {Array.from({ length: 40 }, (_, k) => <View key={'st' + k} style={{ position: 'absolute', left: (k * 97) % width, top: ((k * 53 + camRow * 12) % 900), width: 3, height: 3, borderRadius: 2, backgroundColor: '#fff', opacity: 0.7 }} />)}
+              {(s.spTheme ?? 0) === 2 && <View style={{ position: 'absolute', right: -60, top: 120, width: 200, height: 200, borderRadius: 100, backgroundColor: '#E9C46A', opacity: 0.6 }} />}
+              {(s.spTheme ?? 0) === 3 && <View style={{ position: 'absolute', left: width / 2 - 70, top: 90, width: 140, height: 140, borderRadius: 70, backgroundColor: '#000', borderWidth: 8, borderColor: '#9D4EDD' }} />}
+              {(s.spTheme ?? 0) === 1 && <Text style={{ position: 'absolute', right: 20, top: 120, fontSize: 90 }}>🌍</Text>}
+              {s.race && yOf(ROWS) < 1200 && <Text style={{ position: 'absolute', left: width / 2 - 70, bottom: yOf(ROWS) + 10, fontSize: 130 }}>🌕</Text>}
+              {Array.from({ length: Math.max(0, r1 - r0 + 1) }, (_, k) => r0 + k).map(row => spaceRow(s.seed, row, s.diff).map((c, l) => c === '_' ? null : (
+                <View key={row + '-' + l} style={{ position: 'absolute', left: lx(l) - 48, bottom: yOf(row), width: 96, height: 24, borderRadius: 12, backgroundColor: c === 'm' ? '#6C757D' : '#ADB5BD', borderWidth: 3, borderColor: '#DEE2E6' }}>
+                  {c === 'm' && <Text style={{ position: 'absolute', left: 30, top: -34, fontSize: 30 }}>☄️</Text>}
+                  {c === 'b' && !s.gotB[row + ':' + l] && <Text style={{ position: 'absolute', left: 32, top: -38, fontSize: 30 }}>🔋</Text>}
+                </View>)))}
+              {s.race && s.rivals.map((r, k) => { const y = yOf(r.row ?? 0) + 17; return y < -80 || y > 1000 ? null : bot('r' + k, lx(r.lane ?? 1) + (k - 1) * 14, y, r.color, r.name, (r.slow ?? 0) > 0, 0.75); })}
+              {s.online && Object.entries(s.others).map(([k, o]) => { if (o.gone) return null; const i = Number(k); const y = yOf((o.dd ?? o.d) / ROWD) + 18; return y < -80 || y > 1000 ? null : bot('p' + i, lx(o.y ?? 1) + (i - s.me) * 12, y, PCOL[i], nameOf(i), !!o.sp, 0.8); })}
+              {bot('me', lx(myLane), yOf(s.sp.row) + 22 + Math.sin(Math.PI * Math.min(1, s.sp.hop)) * (spaceRow(s.seed, s.sp.row + 1, s.diff)[s.sp.tl] === '_' ? 60 : 140) * (s.sp.hop > 0 ? 1 : 0), PCOL[s.online ? s.me : 0], s.online ? 'Você' : '', s.slow > 0)}
+              <Text style={st.spaceHint} pointerEvents="none">◀ toque aqui        toque aqui ▶</Text>
+            </View>);
+        })() : (
         <View style={[st.sky, { backgroundColor: W.sky }]}>
           {W.lava && (<>
             <View style={[st.volcano, { left: width - 260, bottom: GROUND }]} />
@@ -375,14 +460,14 @@ export default function App() {
             <View style={[st.head, { backgroundColor: PCOL[s.online ? s.me : 0] }]}><View style={st.eye} /><View style={st.eye} /></View>
             <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} g={s.shelter > 0} />
           </View>
-        </View>
+        </View>)}
       </Pressable>
 
       {W.ice && s.storm > 0 && mode === 'play' && <View style={st.snow} pointerEvents="none"><Text style={st.snowText}>❄️  ❄️  ❄️{'\n'}  ❄️  ❄️  ❄️{'\n'}❄️  ❄️  ❄️</Text></View>}
       {!!W.quiz && mode === 'play' && !!(s.quiz || s.quizRes) && <View style={st.quizBox} pointerEvents="none">{!!s.quiz && <Text style={st.quizText}>{s.quiz}</Text>}{!!s.quizRes && <Text style={st.quizRes}>{s.quizRes}</Text>}</View>}
       {warn && <Text style={st.warn} pointerEvents="none">❄️ Tempestade! {s.coat ? '🧣 Você está protegido!' : 'Pegue a 🧣 ou entre no iglu!'}</Text>}
       <View style={st.hud} pointerEvents="box-none">
-        <Text style={st.score}>🔋 {s.score}</Text>
+        <Text style={[st.score, W.space && { color: '#fff' }]}>🔋 {s.score}</Text>
         {s.race ? (
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text style={st.place}>{ord[place - 1]} lugar</Text>
@@ -485,8 +570,8 @@ export default function App() {
       {s.race && mode === 'play' && (
         <View style={st.powers} pointerEvents="box-none">
           {s.cd > 0 ? <View style={[st.pbtn, { backgroundColor: '#CED4DA' }]}><Text style={st.pbtnText}>{Math.ceil(s.cd)}</Text></View> : (<>
-            <Pressable style={st.pbtn} onPress={() => usePower('rocket')} accessibilityLabel="foguetinho"><Text style={st.pbtnText}>🎉</Text><Text style={st.plabel}>Foguetinho</Text></Pressable>
-            <Pressable style={[st.pbtn, { backgroundColor: '#3D348B' }]} onPress={() => usePower('oil')} accessibilityLabel="soltar oleo"><Text style={st.pbtnText}>💧</Text><Text style={st.plabel}>Óleo</Text></Pressable>
+            <Pressable style={st.pbtn} testID="ui-rocket" onPress={() => usePower('rocket')} accessibilityLabel="foguetinho"><Text style={st.pbtnText}>🎉</Text><Text style={st.plabel}>Foguetinho</Text></Pressable>
+            <Pressable style={[st.pbtn, { backgroundColor: '#3D348B' }]} testID="ui-oil" onPress={() => usePower('oil')} accessibilityLabel="soltar oleo"><Text style={st.pbtnText}>💧</Text><Text style={st.plabel}>Óleo</Text></Pressable>
           </>)}
         </View>)}
       {mode === 'podium' && (!s.online || (s.pod?.order.length ?? 0) > 0) && <Confetti h={height} />}
@@ -562,5 +647,6 @@ const st = StyleSheet.create({
   quizBox: { position: 'absolute', top: 130, left: 20, right: 20, alignItems: 'center', backgroundColor: '#FFFFFFEE', borderRadius: 20, padding: 12 },
   quizText: { fontSize: 32, fontWeight: '900', color: '#023047' },
   quizRes: { fontSize: 20, fontWeight: '800', color: '#2B8A3E', marginTop: 4 },
+  spaceHint: { position: 'absolute', bottom: 30, left: 0, right: 0, textAlign: 'center', color: '#FFFFFFAA', fontSize: 16, fontWeight: '800' },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
