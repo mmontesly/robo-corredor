@@ -3,17 +3,31 @@ import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from
 import * as Haptics from 'expo-haptics';
 import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } from './online';
 
-type Obj = { id: number; x: number; kind: 'gear' | 'oil' | 'battery'; y: number; taken?: boolean };
+type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo';
+type Obj = { id: number; x: number; kind: Kind; y: number; taken?: boolean; live?: boolean };
+type WorldId = 'fabrica' | 'gelo' | 'deserto' | 'doces' | 'cidade';
+type World = { emoji: string; name: string; sky: string; deco: string[]; ground: string; top: string; belt: string; a: string; b: string; puddle?: string; roll?: boolean; hills?: boolean; cars?: boolean; ice?: boolean; tip: string };
+const WORLDS: Record<WorldId, World> = {
+  fabrica: { emoji: '🏭', name: 'Fábrica', sky: '#FFE8A3', deco: ['#8ECAE6', '#A0C4FF', '#BDB2FF', '#9BF6FF'], ground: '#6C757D', top: '#FB8500', belt: '▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸', a: '⚙️', b: '', puddle: '#1D3557', roll: true, tip: 'Pule as engrenagens e o óleo!' },
+  gelo: { emoji: '❄️', name: 'Gelo', sky: '#DFF6FF', deco: ['#FFFFFF', '#CAF0F8', '#ADE8F4', '#E9F5FF'], ground: '#BDE0FE', top: '#FFFFFF', belt: '❄  ❄  ❄  ❄  ❄  ❄  ❄  ❄', a: '⚪', b: '🧊', roll: true, ice: true, tip: 'Pule bolas de neve e gelo. Na ❄️ Tempestade, use a 🧣 roupinha ou entre no iglu!' },
+  deserto: { emoji: '🏜️', name: 'Deserto', sky: '#FFE5B4', deco: ['#F4A261', '#E9C46A', '#F6BD60', '#E76F51'], ground: '#E9C46A', top: '#F4A261', belt: '', a: '🌵', b: '🪨', hills: true, tip: 'Suba e desça as dunas pulando cactos e pedras!' },
+  doces: { emoji: '🍭', name: 'Doces', sky: '#FFE5EC', deco: ['#FFC8DD', '#BDE0FE', '#CDB4DB', '#FFAFCC'], ground: '#CDB4DB', top: '#FF8FAB', belt: '🍬    🍬    🍬    🍬    🍬', a: '🍩', b: '', puddle: '#FF4D8D', roll: true, tip: 'Pule as rosquinhas e a calda grudenta!' },
+  cidade: { emoji: '🏙️', name: 'Cidade', sky: '#CAF0F8', deco: ['#ADB5BD', '#90E0EF', '#FFD6A5', '#CDB4DB'], ground: '#495057', top: '#ADB5BD', belt: '—   —   —   —   —   —   —', a: '🚗', b: '🚕', cars: true, tip: 'Pule os carrinhos que vêm na rua!' },
+};
+const WORLD_IDS = Object.keys(WORLDS) as WorldId[];
+const hill = (w: World, wx: number) => w.hills ? 55 + 35 * Math.sin(wx / 260) + 15 * Math.sin(wx / 97) : 0;
+const pickKind = (r: number, w: World): Kind => w.ice ? (r < 0.3 ? 'gear' : r < 0.5 ? 'oil' : r < 0.72 ? 'battery' : r < 0.85 ? 'coat' : 'igloo') : (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery');
 type Mode = 'menu' | 'play' | 'over' | 'podium' | 'lobby' | 'count';
 const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0'];
 const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde'];
-type Other = { d: number; y: number; fin?: number; gone?: boolean; seen?: number };
-function makeTrack(seed: number) {
-  const r = rng(seed); const out: { wx: number; kind: 'gear' | 'oil' | 'battery'; y: number }[] = [];
-  for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const k = r(); const kind = k < 0.35 ? 'gear' : k < 0.6 ? 'oil' : 'battery'; out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); }
+type Other = { d: number; y: number; fin?: number; gone?: boolean; seen?: number; z?: boolean; c?: boolean };
+function makeTrack(seed: number, w: World) {
+  const r = rng(seed); const out: { wx: number; kind: Kind; y: number }[] = [];
+  for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const kind = pickKind(r(), w); out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); if (kind === 'igloo') wx += 80; }
   return out;
 }
-type Rival = { name: string; color: string; d: number; v: number };
+const stormPlan = (seed: number) => { const r = rng(seed ^ 0x5eed); return { first: 7 + r() * 2, period: 9 + r() * 2 }; };
+type Rival = { name: string; color: string; d: number; v: number; frozen?: number };
 const FINISH = 7000;
 const newRivals = (): Rival[] => [
   { name: 'Bipo', color: '#FF006E', d: 0, v: 250 + Math.random() * 25 },
@@ -51,10 +65,13 @@ function buzz(ms = 20) {
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('menu');
+  const [world, setWorldS] = useState<WorldId>('fabrica');
+  const worldRef = useRef<WorldId>('fabrica'); worldRef.current = world;
+  const setWorld = (w: WorldId) => { worldRef.current = w; setWorldS(w); };
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean) => ({ y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals(), place: 0, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
@@ -63,9 +80,9 @@ export default function App() {
   const [lv, setLv] = useState<{ view: 'choose' | 'join' | 'room' | 'wait'; code: string; err: string; ids: number[] }>({ view: 'choose', code: '', err: '', ids: [] });
   const [count, setCount] = useState(3);
   const leaveRoom = () => { roomRef.current?.close(); roomRef.current = null; };
-  const beginOnline = (seed: number, ids: number[], me: number) => {
-    const n = fresh(true); n.rivals = []; n.online = true; n.me = me; n.ids = ids;
-    n.track = makeTrack(seed); n.objs = n.track.map((t, i) => ({ id: i, x: 9999, kind: t.kind, y: t.y }));
+  const beginOnline = (seed: number, ids: number[], me: number, w: WorldId) => {
+    setWorld(w); const n = fresh(true, seed); n.rivals = []; n.online = true; n.me = me; n.ids = ids;
+    n.track = makeTrack(seed, WORLDS[w]); n.objs = n.track.map((t, i) => ({ id: i, x: 9999, kind: t.kind, y: t.y }));
     ids.filter(i => i !== me).forEach(i => { n.others[i] = { d: 0, y: 0, seen: Date.now() + 4000 }; });
     g.current = n; setCount(3); setMode('count');
     [1, 2, 3].forEach(k => setTimeout(() => { setCount(3 - k); sfx(k === 3 ? 880 : 440, 0.15); }, k * 1000));
@@ -73,9 +90,10 @@ export default function App() {
   };
   const onMsg = (m: Msg) => {
     const s = g.current;
-    if (m.t === 'lobby') setLv(v => ({ ...v, ids: m.ids }));
-    else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0);
-    else if (s.online && m.t === 's' && s.others[m.i]) { s.others[m.i].d = m.d; s.others[m.i].y = m.y; s.others[m.i].seen = Date.now(); }
+    if (m.t === 'lobby') { setLv(v => ({ ...v, ids: m.ids })); if (roomRef.current?.isHost) roomRef.current.send({ t: 'world', w: worldRef.current }); }
+    else if (m.t === 'world') { if (WORLDS[m.w as WorldId]) setWorld(m.w as WorldId); }
+    else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0, (WORLDS[m.w as WorldId] ? m.w : 'fabrica') as WorldId);
+    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; o.d = m.d; o.y = m.y; o.z = m.z; o.c = m.c; o.seen = Date.now(); }
     else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; publish(); }
     else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone }; force(n => n + 1); }
     else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `Robô ${PNAME[m.i]} saiu`; publish(); } }
@@ -89,7 +107,7 @@ export default function App() {
   const errText = (e: any) => e === 'full' ? 'Essa sala está cheia ou já começou.' : e === 'peer-unavailable' || e === 'timeout' ? 'Sala não encontrada. Confira o número.' : 'Sem conexão. Tente de novo.';
   const hostRoom = async () => { setLv({ view: 'wait', code: '', err: '', ids: [] }); try { const r = await createRoom({ onMsg, onClose }); roomRef.current = r; setLv({ view: 'room', code: r.code, err: '', ids: [0] }); } catch (e) { setLv({ view: 'choose', code: '', err: errText(e), ids: [] }); } };
   const join = async (code: string) => { setLv(v => ({ ...v, view: 'wait', err: '' })); try { const r = await joinRoom(code, { onMsg, onClose }); roomRef.current = r; setLv(v => ({ view: 'room', code, err: '', ids: v.ids.length ? v.ids : [0, r.me] })); } catch (e) { setLv({ view: 'join', code: '', err: errText(e), ids: [] }); } };
-  const hostStart = () => { const r = roomRef.current; if (!r?.isHost) return; const ids = r.ids(); if (ids.length < 2) return; r.lock(); const seed = Math.floor(Math.random() * 1e9); r.send({ t: 'start', seed, ids }); beginOnline(seed, ids, 0); };
+  const hostStart = () => { const r = roomRef.current; if (!r?.isHost) return; const ids = r.ids(); if (ids.length < 2) return; r.lock(); const seed = Math.floor(Math.random() * 1e9); r.send({ t: 'start', seed, ids, w: worldRef.current }); beginOnline(seed, ids, 0, worldRef.current); };
   useEffect(() => {
     const iv = setInterval(() => {
       const s = g.current; if (!s.online) return;
@@ -122,15 +140,26 @@ export default function App() {
     let raf = 0, last = 0;
     const loop = (ts: number) => {
       const dt = last ? Math.min((ts - last) / 1000, 0.05) : 0; last = ts;
-      const s = g.current; s.t += dt;
+      const s = g.current; s.t += dt; const W = WORLDS[s.w];
+      s.frozen = Math.max(0, s.frozen - dt); s.storm = Math.max(0, s.storm - dt);
+      if (W.ice && s.t >= s.stormAt) {
+        s.stormAt += s.period; s.storm = 1.5;
+        const inIgloo = s.objs.some(o => o.kind === 'igloo' && o.x < 60 + ROBOT - 6 && o.x + 90 > 60 + 6);
+        if (inIgloo) sfx(700, 0.2, 'triangle'); else if (s.coat) { s.coat = false; sfx(600, 0.2, 'triangle'); } else { s.frozen = 1.5; s.slow = 0; sfx(300, 0.4, 'sine'); buzz(80); }
+        for (const r of s.rivals) r.frozen = Math.random() < 0.55 ? 1.5 : 0;
+      }
+      let target: number;
       if (s.race) {
         s.slow = Math.max(0, s.slow - dt); s.boost = Math.max(0, s.boost - dt);
-        s.speed = 285 * (s.slow > 0 ? 0.5 : 1) * (s.boost > 0 ? 1.35 : 1);
-        for (const r of s.rivals) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * dt;
-      } else s.speed = 260 + s.t * 6;
+        target = 285 * (s.slow > 0 ? 0.5 : 1) * (s.boost > 0 ? 1.35 : 1);
+        for (const r of s.rivals) { r.frozen = Math.max(0, (r.frozen ?? 0) - dt); if (!r.frozen) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * dt; }
+      } else target = 260 + s.t * 6;
+      if (s.frozen > 0) s.speed = 0;
+      else if (W.ice) s.speed += (target - s.speed) * Math.min(1, dt * 1.5); // escorrega no gelo
+      else s.speed = target;
       s.dist += s.speed * dt;
       if (s.online) {
-        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y }); }
+        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: s.y, z: s.frozen > 0, c: s.coat }); }
         if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
@@ -142,27 +171,30 @@ export default function App() {
       s.next -= dt;
       if (s.online) s.next = 99;
       if (s.next <= 0) {
-        const r = Math.random();
-        const kind: Obj['kind'] = r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery';
+        const kind = pickKind(Math.random(), W);
         s.objs.push({ id: s.id++, x: width + 40, kind, y: kind === 'battery' ? (Math.random() < 0.5 ? 20 : 130) : 0 });
         s.next = 0.7 + Math.random() * 0.9 - Math.min(s.t / 120, 0.3);
       }
       const rx = 60;
       for (const o of s.objs) {
-        if (s.online) o.x = 60 + s.track[o.id].wx - s.dist; else o.x -= s.speed * dt;
-        const w = o.kind === 'oil' ? 60 : 40;
+        const car = W.cars && (o.kind === 'gear' || o.kind === 'oil');
+        if (s.online && !o.live) { o.x = 60 + s.track[o.id].wx - s.dist; if (car && o.x < width) o.live = true; }
+        else o.x -= (s.speed + (car ? 130 : 0)) * dt;
+        const w = o.kind === 'oil' ? 60 : o.kind === 'igloo' ? 90 : 40;
         const overlapX = o.x < rx + ROBOT - 10 && o.x + w > rx + 10;
         if (!overlapX || o.taken) continue;
+        if (o.kind === 'igloo') continue;
+        if (o.kind === 'coat') { if (s.y < 60) { o.taken = true; s.coat = true; sfx(1000, 0.15, 'triangle'); } continue; }
         if (o.kind === 'battery') {
           if (s.y + ROBOT > o.y && s.y < o.y + 40) { o.taken = true; s.score++; s.boost = 1.2; sfx(880, 0.1, 'triangle'); }
-        } else if (s.y < (o.kind === 'oil' ? 10 : 34)) {
+        } else if (s.y < (o.kind === 'oil' && !W.cars ? 10 : 34)) {
           sfx(200, 0.3, 'sine'); buzz(120);
           if (s.race) { o.taken = true; s.slow = 1; continue; }
           const b = Math.max(store.get(), s.score); store.set(b); setBest(b);
           setMode('over'); force(n => n + 1); return;
         }
       }
-      s.objs = s.objs.filter(o => o.x > -80 && !(o.kind === 'battery' && o.taken));
+      s.objs = s.objs.filter(o => o.x > -120 && !((o.kind === 'battery' || o.kind === 'coat') && o.taken));
       if (s.race && s.dist > FINISH - 400) s.next = 99;
       force(n => n + 1);
       raf = requestAnimationFrame(loop);
@@ -175,51 +207,74 @@ export default function App() {
   const tap = () => {
     if (mode !== 'play') return;
     const s = g.current; buzz(15);
-    if (s.y === 0) { s.vy = JUMP; sfx(440, 0.12); }
+    if (s.y === 0 && s.frozen <= 0) { s.vy = JUMP; sfx(440, 0.12); }
   };
 
   const s = g.current;
   const place = s.online ? 1 + Object.values(s.others).filter(o => !o.gone && (o.fin !== undefined || o.d > s.dist)).length : 1 + s.rivals.filter(r => r.d > s.dist).length;
+  const Picker = ({ off }: { off?: boolean }) => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 12 }}>
+      {WORLD_IDS.map(id => (
+        <Pressable key={id} disabled={off} accessibilityLabel={'mundo ' + WORLDS[id].name} onPress={() => { setWorld(id); g.current = { ...g.current, w: id }; roomRef.current?.isHost && roomRef.current.send({ t: 'world', w: id }); buzz(10); }}
+          style={[st.wbtn, world === id && st.wbtnOn, off && world !== id && { opacity: 0.35 }]}>
+          <Text style={{ fontSize: 34 }}>{WORLDS[id].emoji}</Text>
+        </Pressable>))}
+      <Text style={st.wname}>{WORLDS[world].emoji} {WORLDS[world].name}</Text>
+    </View>);
   const ord = ['1º', '2º', '3º', '4º'];
   const gearRot = `${(s.t * 360) % 360}deg`;
+  const W = WORLDS[s.w];
+  const gy = (wx: number) => GROUND + hill(W, wx);
+  const Extras = ({ z, c }: { z?: boolean; c?: boolean }) => (<>{c && <Text style={st.scarf}>🧣</Text>}{z && <View style={st.iceCube}><Text style={{ fontSize: 14 }}>❄️</Text></View>}</>);
+  const warn = W.ice && mode === 'play' && s.stormAt - s.t < 2 && s.stormAt - s.t > 0;
   return (
-    <View style={st.root}>
+    <View style={[st.root, { backgroundColor: W.sky }]}>
       <Pressable style={StyleSheet.absoluteFill} onPressIn={tap} accessibilityLabel="Toque para o Nodex pular">
-        <View style={st.sky}>
+        <View style={[st.sky, { backgroundColor: W.sky }]}>
           {[0, 1, 2, 3].map(i => (
-            <View key={i} style={[st.machine, { left: ((i * 160 - s.t * 40) % (width + 160) + width + 160) % (width + 160) - 120, height: 90 + (i % 2) * 60, backgroundColor: ['#8ECAE6', '#A0C4FF', '#BDB2FF', '#9BF6FF'][i] }]} />
+            <View key={i} style={[st.machine, { left: ((i * 160 - s.t * 40) % (width + 160) + width + 160) % (width + 160) - 120, height: (W.cars ? 160 : 90) + (i % 2) * 60 + (W.hills ? 60 : 0), backgroundColor: W.deco[i], borderRadius: W.ice || W.hills ? 60 : undefined }]} />
           ))}
-          <View style={[st.belt, { height: GROUND }]}>
-            <Text style={st.beltText}>▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸</Text>
-          </View>
-          {s.objs.map(o => o.kind === 'oil' ? (
-            <View key={o.id} style={[st.oil, { left: o.x, bottom: GROUND - 6 }]} />
+          {W.hills ? Array.from({ length: Math.ceil(width / 10) + 1 }, (_, k) => (
+            <View key={'h' + k} style={{ position: 'absolute', left: k * 10, bottom: 0, width: 11, height: gy(s.dist + k * 10 - 60), backgroundColor: W.ground, borderTopWidth: 8, borderTopColor: W.top }} />
+          )) : (
+            <View style={[st.belt, { height: GROUND, backgroundColor: W.ground, borderTopColor: W.top }]}>
+              <Text style={[st.beltText, W.cars && { color: '#FFD60A' }]}>{W.belt}</Text>
+            </View>)}
+          {s.objs.map(o => { if (o.x > width + 100) return null; const b = gy(s.dist + o.x - 60); return o.kind === 'oil' ? (
+            W.puddle ? <View key={o.id} style={[st.oil, { left: o.x, bottom: b - 6, backgroundColor: W.puddle }]} />
+              : <Text key={o.id} style={[st.gear, { left: o.x, bottom: b - 4, fontSize: W.cars ? 44 : 30 }]}>{W.b}</Text>
           ) : o.kind === 'gear' ? (
-            <Text key={o.id} style={[st.gear, { left: o.x, bottom: GROUND - 4, transform: [{ rotate: `-${gearRot}` }] }]}>⚙️</Text>
+            <Text key={o.id} style={[st.gear, { left: o.x, bottom: b - 4, fontSize: W.cars ? 44 : 40, transform: W.roll ? [{ rotate: `-${gearRot}` }] : [] }]}>{W.a}</Text>
+          ) : o.kind === 'coat' ? (
+            <Text key={o.id} style={[st.battery, { left: o.x, bottom: b + 30 }]}>🧣</Text>
+          ) : o.kind === 'igloo' ? (
+            <View key={o.id} style={[st.igloo, { left: o.x, bottom: b - 2 }]}><View style={st.iglooDoor} /></View>
           ) : (
-            <Text key={o.id} style={[st.battery, { left: o.x, bottom: GROUND + o.y }]}>🔋</Text>
-          ))}
-          {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
+            <Text key={o.id} style={[st.battery, { left: o.x, bottom: b + o.y }]}>🔋</Text>
+          ); })}
+          {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT, bottom: gy(FINISH) }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
           {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const x = 60 + (o.d - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
-            <View key={'p' + i} style={[st.robot, { left: x, bottom: GROUND + o.y + i * 5, opacity: 0.85 }]}>
+            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(o.d) + o.y + i * 5, opacity: 0.85 }]}>
               <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
               <View style={[st.head, { backgroundColor: PCOL[i] }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{PNAME[i]}</Text>
+              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{PNAME[i]}</Text><Extras z={o.z} c={o.c} />
             </View>); })}
           {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist); if (x < -80 || x > width + 80) return null; return (
-            <View key={r.name} style={[st.robot, { left: x, bottom: GROUND + 4 + i * 6, opacity: 0.9, transform: [{ scale: 0.85 }] }]}>
+            <View key={r.name} style={[st.robot, { left: x, bottom: gy(r.d) + 4 + i * 6, opacity: 0.9, transform: [{ scale: 0.85 }] }]}>
               <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
               <View style={[st.head, { backgroundColor: r.color }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} /><Text style={st.tag}>{r.name}</Text>
+              <View style={st.smile} /><Text style={st.tag}>{r.name}</Text><Extras z={(r.frozen ?? 0) > 0} />
             </View>); })}
-          <View style={[st.robot, { left: 60, bottom: GROUND + s.y }]}>
+          <View style={[st.robot, { left: 60, bottom: gy(s.dist) + s.y, transform: s.slow > 0 && s.race ? [{ rotate: `${(1 - s.slow) * 360}deg` }] : [] }]}>
             <View style={st.antenna} /><View style={st.ball} />
             <View style={[st.head, { backgroundColor: PCOL[s.online ? s.me : 0] }]}><View style={st.eye} /><View style={st.eye} /></View>
-            <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}
+            <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} />
           </View>
         </View>
       </Pressable>
 
+      {W.ice && s.storm > 0 && mode === 'play' && <View style={st.snow} pointerEvents="none"><Text style={st.snowText}>❄️  ❄️  ❄️{'\n'}  ❄️  ❄️  ❄️{'\n'}❄️  ❄️  ❄️</Text></View>}
+      {warn && <Text style={st.warn} pointerEvents="none">❄️ Tempestade! {s.coat ? '🧣 Você está protegido!' : 'Pegue a 🧣 ou entre no iglu!'}</Text>}
       <View style={st.hud} pointerEvents="box-none">
         <Text style={st.score}>🔋 {s.score}</Text>
         {s.race ? (
@@ -265,6 +320,7 @@ export default function App() {
                 {[0, 1, 2, 3].map(i => <View key={i} style={[st.mini, { marginHorizontal: 6, backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} />)}
               </View>
               <Text style={st.sub}>{lv.ids.length}/{MAX} robôs na sala</Text>
+              <Picker off={!roomRef.current?.isHost} />
               {roomRef.current?.isHost ? (
                 <Pressable style={[st.btn, lv.ids.length < 2 && { opacity: 0.4 }]} onPress={hostStart}><Text style={st.btnText}>{lv.ids.length < 2 ? 'Esperando…' : '▶ Começar'}</Text></Pressable>
               ) : <Text style={st.sub}>Esperando quem criou a sala começar…</Text>}
@@ -307,8 +363,9 @@ export default function App() {
               <Text style={st.sub}>Nodex chegou em {ord[s.place - 1]} lugar e pegou {s.score} bateria{s.score === 1 ? '' : 's'}!</Text>
             </>) : (<>
               <Text style={st.title}>{mode === 'menu' ? 'Nodex: Robô Corredor' : 'Tente de novo! 😄'}</Text>
-              <Text style={st.sub}>{mode === 'menu' ? 'Toque na tela para o Nodex pular as engrenagens e o óleo. Pegue baterias!' : `O Nodex pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best}`}</Text>
+              <Text style={st.sub}>{mode === 'menu' ? `Toque para o Nodex pular. ${WORLDS[world].tip} Baterias dão turbo!` : `O Nodex pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best}`}</Text>
             </>)}
+            {mode === 'menu' && <Picker />}
             {onlineAvailable() && <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginBottom: 14 }]} onPress={() => { leaveRoom(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Online</Text></Pressable>}
             <Pressable style={st.btn} onPress={() => { leaveRoom(); start(true); }}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
             <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => { leaveRoom(); start(false); }}><Text style={st.btnText}>∞ Sem fim</Text></Pressable>
@@ -359,5 +416,15 @@ const st = StyleSheet.create({
   pad: { flexDirection: 'row', flexWrap: 'wrap', width: 270, justifyContent: 'center' },
   key: { width: 76, height: 64, margin: 6, borderRadius: 16, backgroundColor: '#FFE8A3', alignItems: 'center', justifyContent: 'center' },
   keyText: { fontSize: 30, fontWeight: '900', color: '#023047' },
+  wbtn: { width: 58, height: 58, margin: 4, borderRadius: 16, backgroundColor: '#F1F3F5', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'transparent' },
+  wbtnOn: { borderColor: '#FB5607', backgroundColor: '#FFF3E0' },
+  wname: { width: '100%', textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#023047', marginTop: 4 },
+  igloo: { position: 'absolute', width: 90, height: 60, borderTopLeftRadius: 45, borderTopRightRadius: 45, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: '#90E0EF', alignItems: 'center', justifyContent: 'flex-end' },
+  iglooDoor: { width: 30, height: 28, borderTopLeftRadius: 15, borderTopRightRadius: 15, backgroundColor: '#023047' },
+  scarf: { position: 'absolute', bottom: -6, fontSize: 26 },
+  iceCube: { position: 'absolute', left: -8, top: -8, width: ROBOT + 16, height: ROBOT + 16, borderRadius: 12, backgroundColor: 'rgba(173,232,244,0.65)', borderWidth: 3, borderColor: '#FFFFFF', alignItems: 'flex-end' },
+  snow: { ...(StyleSheet.absoluteFill as any), backgroundColor: 'rgba(255,255,255,0.45)', alignItems: 'center', justifyContent: 'center' },
+  snowText: { fontSize: 48, textAlign: 'center', lineHeight: 90 },
+  warn: { position: 'absolute', top: 140, left: 16, right: 16, textAlign: 'center', fontSize: 24, fontWeight: '900', color: '#0077B6', backgroundColor: '#FFFFFFDD', borderRadius: 16, padding: 10 },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
