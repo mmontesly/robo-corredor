@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { RobotBody, SKINS, FREE_SKINS } from './skins';
 import { createRoom, joinRoom, onlineAvailable, rng, MAX, type Room, type Msg } from './online';
 
 type Kind = 'gear' | 'oil' | 'battery' | 'coat' | 'igloo' | 'ans';
@@ -22,12 +23,12 @@ const WORLDS: Record<WorldId, World> = {
 const WORLD_IDS = Object.keys(WORLDS) as WorldId[];
 const hill = (w: World, wx: number) => w.hills ? 55 + 35 * Math.sin(wx / 260) + 15 * Math.sin(wx / 97) : 0;
 const pickKind = (r: number, w: World): Kind => w.ice ? (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery') : (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery');
-type Mode = 'menu' | 'play' | 'over' | 'podium' | 'lobby' | 'count';
+type Mode = 'story' | 'skins' | 'menu' | 'play' | 'over' | 'podium' | 'lobby' | 'count';
 const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0'];
 const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde'];
 // Apelidos só de uma lista pronta (sem texto livre = sem nomes reais/dados pessoais).
 const NICKS = ['Raio', 'Foguete', 'Turbo', 'Faísca', 'Pipoca', 'Trovão', 'Cometa', 'Bolinha', 'Pulinho', 'Parafuso', 'Estrela', 'Biscoito'];
-type Other = { dd?: number; dy?: number; v?: number; lt?: number; d: number; y: number; fin?: number; gone?: boolean; seen?: number; z?: boolean; c?: boolean; g?: boolean; sp?: boolean };
+type Other = { dd?: number; dy?: number; v?: number; lt?: number; d: number; y: number; fin?: number; gone?: boolean; seen?: number; k?: number; z?: boolean; c?: boolean; g?: boolean; sp?: boolean };
 function makeTrack(seed: number, w: World) {
   const r = rng(seed); const out: { wx: number; kind: Kind; y: number }[] = [];
   for (let wx = 700; wx < 6600; wx += 230 + r() * 300) { const kind = pickKind(r(), w); out.push({ wx, kind, y: kind === 'battery' ? (r() < 0.5 ? 20 : 130) : 0 }); if (kind === 'igloo') wx += 80; }
@@ -54,11 +55,13 @@ function spaceRow(seed: number, row: number, diff = 1): string[] {
   return a;
 }
 const stormPlan = (seed: number) => { const r = rng(seed ^ 0x5eed); return { first: 7 + r() * 2, period: 9 + r() * 2 }; };
-type Rival = { row?: number; lane?: number; hopT?: number; name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
+type Rival = { skin?: number; row?: number; lane?: number; hopT?: number; name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
 type Proj = { d: number; from: string; to: string; life: number };
 type Puddle = { wx: number; owner: string; hit: string[] };
 const POWER_CD = 8;
 const FINISH = 7000;
+const SPACE_PHASES = ['Big Bang', 'Terra', 'Júpiter', 'Buraco Negro', 'Lua'];
+const PHASES = ['Começo', 'Aquecendo', 'Desafio', 'Turbo', 'Chefão'];
 const newRivals = (): Rival[] => [
   { name: 'Bipo', color: '#FF006E', d: 0, v: 250 + Math.random() * 25 },
   { name: 'Zuca', color: '#8338EC', d: 0, v: 240 + Math.random() * 25 },
@@ -108,13 +111,20 @@ function Confetti({ h }: { h: number }) {
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('menu');
+  const loadJ = (k: string, d: any) => { try { const v = (globalThis as any).localStorage?.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+  const saveJ = (k: string, v: any) => { try { (globalThis as any).localStorage?.setItem(k, JSON.stringify(v)); } catch {} };
+  const [done, setDone] = useState<number[]>(() => loadJ('robo-corredor-story', []));
+  const [mySkin, setMySkinS] = useState<number>(() => loadJ('robo-corredor-skin', 0));
+  const setMySkin = (k: number) => { setMySkinS(k); saveJ('robo-corredor-skin', k); };
+  const [story, setStory] = useState<null | { w: WorldId; n: number }>(null);
+  const [storyMsg, setStoryMsg] = useState('');
   const [world, setWorldS] = useState<WorldId>('fabrica');
   const worldRef = useRef<WorldId>('fabrica'); worldRef.current = world;
   const setWorld = (w: WorldId) => { worldRef.current = w; setWorldS(w); };
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 1, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
   const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
@@ -148,7 +158,7 @@ export default function App() {
       if (m.k === 'rocket') s.projs.push({ d: m.at + 30, from, to: m.to < 0 ? '' : keyFor(m.to), life: 1.5 });
       else s.puddles.push({ wx: m.at, owner: from, hit: [] });
     }
-    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.z = m.z; o.c = m.c; o.g = m.g; o.sp = m.sp; o.seen = Date.now(); }
+    else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.k = typeof m.k === 'number' && m.k >= 0 && m.k < SKINS.length ? m.k : 0; o.z = m.z; o.c = m.c; o.g = m.g; o.sp = m.sp; o.seen = Date.now(); }
     else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; publish(); }
     else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone }; force(n => n + 1); }
     else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `${nameOf(m.i)} saiu`; publish(); } }
@@ -166,7 +176,7 @@ export default function App() {
   useEffect(() => {
     const iv = setInterval(() => {
       const s = g.current; if (!s.online) return;
-      if (mode === 'podium') roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: 0 });
+      if (mode === 'podium') roomRef.current?.send({ t: 's', i: s.me, k: mySkin, d: s.dist, y: 0 });
       let ch = false;
       for (const [k, o] of Object.entries(s.others)) if (!o.gone && o.fin === undefined && Date.now() - (o.seen ?? 0) > 6000) { o.gone = true; s.note = `${nameOf(Number(k))} saiu`; ch = true; }
       if (ch) publish();
@@ -244,11 +254,12 @@ export default function App() {
         o.dy = W.space ? o.y : o.y <= 1 ? 0 : o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
       }
       if (s.online) {
-        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, d: s.dist, y: W.space ? s.sp.lane : s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
+        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, k: mySkin, d: s.dist, y: W.space ? s.sp.lane : s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
         if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
         s.place = 1 + s.rivals.filter(r => r.d >= s.dist).length;
+        storyFinish(s.place);
         sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60);
         setMode('podium'); force(n => n + 1); return;
       }
@@ -259,7 +270,7 @@ export default function App() {
       if (s.next <= 0) {
         const kind = pickKind(Math.random(), W);
         s.objs.push({ id: s.id++, x: width + 40, kind, y: kind === 'battery' ? (Math.random() < 0.5 ? 20 : 130) : 0 });
-        s.next = 0.7 + Math.random() * 0.9 - Math.min(s.t / 120, 0.3);
+        s.next = (0.7 + Math.random() * 0.9) * (1.2 - 0.06 * s.diff) - Math.min(s.t / 120, 0.3);
       }
       const rx = 60;
       for (const o of s.objs) {
@@ -298,7 +309,30 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [mode, width]);
 
-  const start = (race = g.current.race) => { g.current = fresh(race); sfx(520); buzz(); setMode('play'); };
+  const storyRef = useRef(story); storyRef.current = story;
+  const gidx = (w: WorldId, n: number) => WORLD_IDS.indexOf(w) * 5 + n - 1;
+  const skinOpen = (k: number, d = done) => k < FREE_SKINS || (k === SKINS.length - 1 ? d.length >= WORLD_IDS.length * 5 : d.includes(k - FREE_SKINS));
+  const phaseOpen = (w: WorldId, n: number) => n === 1 || done.includes(gidx(w, n - 1));
+  const storyFinish = (place: number) => {
+    const st = storyRef.current; if (!st) return;
+    if (place > 3) { setStoryMsg('Quase! Chegue entre os 3 primeiros para passar de fase.'); return; }
+    const gi = gidx(st.w, st.n);
+    setDone(prev => {
+      if (prev.includes(gi)) { setStoryMsg('Fase completa! ⭐'); return prev; }
+      const nd = [...prev, gi]; saveJ('robo-corredor-story', nd);
+      const newSkin = SKINS.findIndex((_, k) => skinOpen(k, nd) && !skinOpen(k, prev));
+      setStoryMsg('Fase completa! ⭐' + (newSkin >= 0 ? ` Nova skin: ${SKINS[newSkin].name}! 🎁` : ''));
+      return nd;
+    });
+  };
+  const start = (race = g.current.race, st: null | { w: WorldId; n: number } = null) => {
+    setStory(st); storyRef.current = st; setStoryMsg('');
+    if (st) setWorld(st.w);
+    const n = fresh(race);
+    if (st) { n.w = st.w; n.diff = st.n; n.spTheme = st.n - 1; n.rivals.forEach(r => { r.v *= 0.86 + 0.05 * st.n; }); }
+    n.rivals.forEach((r, k) => { r.skin = (k * 2 + 1 + Math.floor(Math.random() * 3)) % FREE_SKINS; });
+    g.current = n; sfx(520); buzz(); setMode('play');
+  };
   // ---- Poderes: foguetinho de confete (gira e freia quem está à frente) e poça de óleo (freia quem vem atrás)
   const posOf = (s: ReturnType<typeof fresh>, key: string) => key === 'me' ? s.dist : key[0] === 'r' ? s.rivals[Number(key.slice(1))]?.d ?? 0 : (s.others[Number(key.slice(1))]?.dd ?? s.others[Number(key.slice(1))]?.d ?? 0);
   const racers = (s: ReturnType<typeof fresh>) => [...(s.online ? Object.entries(s.others).filter(([, o]) => !o.gone && o.fin === undefined).map(([i]) => 'p' + i) : s.rivals.map((_, k) => 'r' + k)), 'me'];
@@ -383,11 +417,9 @@ export default function App() {
           const yOf = (rf: number) => base + (rf - camRow) * ROWH;
           const lx = (l: number) => width * (0.2 + 0.3 * l);
           const r0 = Math.max(0, Math.floor(camRow) - 2), r1 = Math.min(ROWS, Math.ceil(camRow) + 7);
-          const bot = (key: string, x: number, y: number, color: string, label: string, spin: boolean, sc = 1) => (
+          const bot = (key: string, x: number, y: number, color: string, label: string, spin: boolean, sc = 1, skinOf = 0) => (
             <View key={key} style={[st.robot, { left: x - ROBOT / 2, bottom: y, transform: [{ scale: sc }, { rotate: spin ? `${(s.t * 720) % 360}deg` : '0deg' }] }]}>
-              <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
-              <View style={[st.head, { backgroundColor: color }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} />{!!label && <Text style={[st.tag, { color: '#fff' }]}>{label}</Text>}
+              <RobotBody color={color} skin={skinOf} t={s.t} />{!!label && <Text style={[st.tag, { color: '#fff' }]}>{label}</Text>}
             </View>);
           const theme = ['#14213D', '#0B3D91', '#5E3023', '#240046', '#1B263B'][s.spTheme ?? 0];
           const myLane = s.sp.lane + (s.sp.tl - s.sp.lane) * Math.min(1, s.sp.hop);
@@ -403,9 +435,9 @@ export default function App() {
                   {c === 'm' && <Text style={{ position: 'absolute', left: 30, top: -34, fontSize: 30 }}>☄️</Text>}
                   {c === 'b' && !s.gotB[row + ':' + l] && <Text style={{ position: 'absolute', left: 32, top: -38, fontSize: 30 }}>🔋</Text>}
                 </View>)))}
-              {s.race && s.rivals.map((r, k) => { const y = yOf(r.row ?? 0) + 17; return y < -80 || y > 1000 ? null : bot('r' + k, lx(r.lane ?? 1) + (k - 1) * 14, y, r.color, r.name, (r.slow ?? 0) > 0, 0.75); })}
-              {s.online && Object.entries(s.others).map(([k, o]) => { if (o.gone) return null; const i = Number(k); const y = yOf((o.dd ?? o.d) / ROWD) + 18; return y < -80 || y > 1000 ? null : bot('p' + i, lx(o.y ?? 1) + (i - s.me) * 12, y, PCOL[i], nameOf(i), !!o.sp, 0.8); })}
-              {bot('me', lx(myLane), yOf(s.sp.row) + 22 + Math.sin(Math.PI * Math.min(1, s.sp.hop)) * (spaceRow(s.seed, s.sp.row + 1, s.diff)[s.sp.tl] === '_' ? 60 : 140) * (s.sp.hop > 0 ? 1 : 0), PCOL[s.online ? s.me : 0], s.online ? 'Você' : '', s.slow > 0)}
+              {s.race && s.rivals.map((r, k) => { const y = yOf(r.row ?? 0) + 17; return y < -80 || y > 1000 ? null : bot('r' + k, lx(r.lane ?? 1) + (k - 1) * 14, y, r.color, r.name, (r.slow ?? 0) > 0, 0.75, r.skin ?? 0); })}
+              {s.online && Object.entries(s.others).map(([k, o]) => { if (o.gone) return null; const i = Number(k); const y = yOf((o.dd ?? o.d) / ROWD) + 18; return y < -80 || y > 1000 ? null : bot('p' + i, lx(o.y ?? 1) + (i - s.me) * 12, y, PCOL[i], nameOf(i), !!o.sp, 0.8, o.k ?? 0); })}
+              {bot('me', lx(myLane), yOf(s.sp.row) + 22 + Math.sin(Math.PI * Math.min(1, s.sp.hop)) * (spaceRow(s.seed, s.sp.row + 1, s.diff)[s.sp.tl] === '_' ? 60 : 140) * (s.sp.hop > 0 ? 1 : 0), PCOL[s.online ? s.me : 0], s.online ? 'Você' : '', s.slow > 0, 1, mySkin)}
               <Text style={st.spaceHint} pointerEvents="none">◀ toque aqui        toque aqui ▶</Text>
             </View>);
         })() : (
@@ -445,20 +477,14 @@ export default function App() {
           {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT, bottom: gy(FINISH) }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
           {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const od = o.dd ?? o.d; const x = 60 + (od - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
             <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(od + (i - s.me) * 26) + (o.y > 1 ? (o.dy ?? o.y) : 0), opacity: 0.9, transform: o.sp ? [{ rotate: `${(s.t * 720) % 360}deg` }] : [] }]}>
-              <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
-              <View style={[st.head, { backgroundColor: PCOL[i] }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} g={o.g} />
+              <RobotBody color={PCOL[i]} skin={(o.k ?? 0)} t={s.t} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} g={o.g} />
             </View>); })}
           {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist) + (i + 1) * 8; if (x < -80 || x > width + 80) return null; return (
             <View key={r.name} style={[st.robot, { left: x, bottom: gy(s.dist + x - 60), opacity: 0.9, transform: [{ scale: 0.85 }, { rotate: r.slow ? `${(1 - r.slow) * 360}deg` : '0deg' }] }]}>
-              <View style={st.antenna} /><View style={[st.ball, { backgroundColor: '#FFD60A' }]} />
-              <View style={[st.head, { backgroundColor: r.color }]}><View style={st.eye} /><View style={st.eye} /></View>
-              <View style={st.smile} /><Text style={st.tag}>{r.name}</Text><Extras z={(r.frozen ?? 0) > 0} />
+              <RobotBody color={r.color} skin={(r.skin ?? 0)} t={s.t} /><Text style={st.tag}>{r.name}</Text><Extras z={(r.frozen ?? 0) > 0} />
             </View>); })}
           <View style={[st.robot, { left: 60, bottom: gy(s.dist) + s.y, transform: s.slow > 0 && s.race ? [{ rotate: `${(1 - s.slow) * 360}deg` }] : [] }]}>
-            <View style={st.antenna} /><View style={st.ball} />
-            <View style={[st.head, { backgroundColor: PCOL[s.online ? s.me : 0] }]}><View style={st.eye} /><View style={st.eye} /></View>
-            <View style={st.smile} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} g={s.shelter > 0} />
+            <RobotBody color={PCOL[s.online ? s.me : 0]} skin={mySkin} t={s.t} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} g={s.shelter > 0} />
           </View>
         </View>)}
       </Pressable>
@@ -525,7 +551,49 @@ export default function App() {
           </View>
         </View>
       )}
-      {mode !== 'play' && mode !== 'lobby' && mode !== 'count' && (
+      {mode === 'story' && (
+        <View style={st.overlay}>
+          <View style={[st.card, { maxHeight: height - 60, paddingHorizontal: 14 }]}>
+            <Text style={st.title}>📖 Modo História</Text>
+            <Text style={st.wname}>⭐ {done.length}/{WORLD_IDS.length * 5} fases · 🎭 {SKINS.filter((_, k) => skinOpen(k)).length}/50 skins</Text>
+            <ScrollView style={{ width: '100%', marginVertical: 10 }} contentContainerStyle={{ paddingBottom: 6 }}>
+              {WORLD_IDS.map(w => (
+                <View key={w} style={st.mapRow}>
+                  <Text style={{ fontSize: 30, width: 40 }}>{WORLDS[w].emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#023047' }}>{WORLDS[w].name}</Text>
+                    <View style={{ flexDirection: 'row' }}>
+                      {[1, 2, 3, 4, 5].map(n => { const ok = done.includes(gidx(w, n)); const open = phaseOpen(w, n); return (
+                        <Pressable key={n} disabled={!open} accessibilityLabel={`fase ${WORLDS[w].name} ${n}`} onPress={() => start(true, { w, n })} style={[st.phase, ok ? { backgroundColor: '#FFD43B' } : open ? { backgroundColor: '#06D6A0' } : { backgroundColor: '#E9ECEF' }]}>
+                          <Text style={{ fontSize: ok ? 18 : 16, fontWeight: '900', color: open ? '#023047' : '#ADB5BD' }}>{ok ? '⭐' : open ? n : '🔒'}</Text>
+                        </Pressable>); })}
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#495057' }}>{(WORLDS[w].space ? SPACE_PHASES : PHASES).join(' · ')}</Text>
+                  </View>
+                </View>))}
+            </ScrollView>
+            <Pressable style={[st.btn, { backgroundColor: '#ADB5BD' }]} onPress={() => setMode('menu')}><Text style={st.btnText}>← Voltar</Text></Pressable>
+          </View>
+        </View>
+      )}
+      {mode === 'skins' && (
+        <View style={st.overlay}>
+          <View style={[st.card, { maxHeight: height - 60, paddingHorizontal: 10 }]}>
+            <Text style={st.title}>🎭 Skins</Text>
+            <Text style={st.wname}>{SKINS[mySkin].name} · {SKINS.filter((_, k) => skinOpen(k)).length}/50 liberadas</Text>
+            <ScrollView style={{ width: '100%', marginVertical: 10 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {SKINS.map((k, i) => { const open = skinOpen(i); return (
+                <Pressable key={i} disabled={!open} accessibilityLabel={'skin ' + k.name} onPress={() => setMySkin(i)} style={[st.skinCell, mySkin === i && { borderColor: '#FB5607', backgroundColor: '#FFF3E0' }]}>
+                  <View style={{ transform: [{ scale: 0.55 }], width: ROBOT, height: ROBOT, alignItems: 'center', marginTop: 10 }}><RobotBody color={PCOL[0]} skin={i} dim={!open} t={s.t} /></View>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#023047', textAlign: 'center' }} numberOfLines={1}>{open ? k.name : '🔒 ' + (i === SKINS.length - 1 ? 'Tudo' : 'Fase ' + (i - FREE_SKINS + 1))}</Text>
+                </Pressable>); })}
+            </ScrollView>
+            <Text style={{ fontSize: 12, color: '#495057', textAlign: 'center', marginBottom: 8 }}>Ganhe skins completando fases do Modo História. A Dourada aparece quando você completar tudo!</Text>
+            <Pressable style={[st.btn, { backgroundColor: '#ADB5BD' }]} onPress={() => setMode('menu')}><Text style={st.btnText}>← Voltar</Text></Pressable>
+          </View>
+        </View>
+      )}
+      {mode !== 'play' && mode !== 'lobby' && mode !== 'count' && mode !== 'story' && mode !== 'skins' && (
         <View style={st.overlay} pointerEvents="box-none">
           <View style={st.card}>
             {mode === 'podium' && s.online ? (() => {
@@ -556,14 +624,25 @@ export default function App() {
                     </View>)); })()}
               </View>
               <Text style={st.sub}>Nodex chegou em {ord[s.place - 1]} lugar e pegou {s.score} bateria{s.score === 1 ? '' : 's'}!</Text>
+              {!!story && !!storyMsg && <Text style={[st.sub, { color: '#2B8A3E', fontWeight: '900', marginTop: 0 }]}>{storyMsg}</Text>}
             </>) : (<>
               <Text style={st.title}>{mode === 'menu' ? 'Nodex: Robô Corredor' : 'Tente de novo! 😄'}</Text>
               <Text style={st.sub}>{mode === 'menu' ? `Toque para o Nodex pular. ${WORLDS[world].tip} Baterias dão turbo!` : `O Nodex pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best}`}</Text>
             </>)}
             {mode === 'menu' && <Picker />}
+            {mode === 'podium' && !!story ? (<>
+              {s.place <= 3 && (story.n < 5 || WORLD_IDS.indexOf(story.w) < WORLD_IDS.length - 1) && <Pressable style={st.btn} onPress={() => { const nx = story.n < 5 ? { w: story.w, n: story.n + 1 } : { w: WORLD_IDS[WORLD_IDS.indexOf(story.w) + 1], n: 1 }; start(true, nx); }}><Text style={st.btnText}>▶ Próxima fase</Text></Pressable>}
+              <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => start(true, story)}><Text style={st.btnText}>↻ De novo</Text></Pressable>
+              <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginTop: 14 }]} onPress={() => { setStory(null); setMode('story'); }}><Text style={st.btnText}>🗺️ Mapa</Text></Pressable>
+            </>) : (<>
+            {mode === 'menu' && <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+              <Pressable style={[st.btn2, { backgroundColor: '#9775FA' }]} onPress={() => setMode('story')} accessibilityLabel="modo historia"><Text style={st.btn2Text}>📖 História</Text></Pressable>
+              <Pressable style={[st.btn2, { backgroundColor: '#F06595' }]} onPress={() => setMode('skins')} accessibilityLabel="skins"><Text style={st.btn2Text}>🎭 Skins</Text></Pressable>
+            </View>}
             {onlineAvailable() && <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginBottom: 14 }]} onPress={() => { leaveRoom(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Online</Text></Pressable>}
             <Pressable style={st.btn} onPress={() => { leaveRoom(); start(true); }}><Text style={st.btnText}>🏁 Corrida</Text></Pressable>
             <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => { leaveRoom(); start(false); }}><Text style={st.btnText}>∞ Sem fim</Text></Pressable>
+            </>)}
           </View>
         </View>
       )}
@@ -602,7 +681,7 @@ const st = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 28, padding: 28, width: '85%', maxWidth: 420, alignItems: 'center' },
   title: { fontSize: 34, fontWeight: '900', color: '#FB5607', textAlign: 'center' },
   sub: { fontSize: 20, color: '#023047', textAlign: 'center', marginVertical: 18 },
-  btn: { backgroundColor: '#06D6A0', borderRadius: 40, paddingVertical: 22, paddingHorizontal: 40, minWidth: 240, alignItems: 'center' },
+  btn: { backgroundColor: '#06D6A0', borderRadius: 40, paddingVertical: 16, paddingHorizontal: 40, minWidth: 240, alignItems: 'center' },
   place: { fontSize: 26, fontWeight: '900', color: '#FB5607' },
   bar: { width: '80%', height: 10, borderRadius: 5, backgroundColor: '#fff', marginTop: 4, overflow: 'hidden' },
   barFill: { height: 10, backgroundColor: '#06D6A0' },
@@ -648,5 +727,10 @@ const st = StyleSheet.create({
   quizText: { fontSize: 32, fontWeight: '900', color: '#023047' },
   quizRes: { fontSize: 20, fontWeight: '800', color: '#2B8A3E', marginTop: 4 },
   spaceHint: { position: 'absolute', bottom: 30, left: 0, right: 0, textAlign: 'center', color: '#FFFFFFAA', fontSize: 16, fontWeight: '800' },
+  btn2: { borderRadius: 30, paddingVertical: 14, paddingHorizontal: 14, marginHorizontal: 5, minWidth: 130, alignItems: 'center' },
+  btn2Text: { fontSize: 20, fontWeight: '900', color: '#fff' },
+  mapRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F3F5' },
+  phase: { width: 40, height: 40, borderRadius: 20, marginRight: 6, marginVertical: 3, alignItems: 'center', justifyContent: 'center' },
+  skinCell: { width: 62, height: 74, margin: 3, borderRadius: 12, backgroundColor: '#F8F9FA', borderWidth: 3, borderColor: 'transparent', alignItems: 'center', overflow: 'hidden' },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
 });
