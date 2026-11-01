@@ -62,6 +62,19 @@ function buzz(ms = 20) {
   else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
+const CONF_COLORS = ['#FF006E', '#FB5607', '#FFBE0B', '#06D6A0', '#3A86FF', '#8338EC'];
+const PIECES = Array.from({ length: 36 }, (_, i) => ({ x: (i * 37) % 100, delay: (i * 0.13) % 1.6, speed: 0.6 + ((i * 7) % 5) / 10, size: 8 + (i % 3) * 4, c: CONF_COLORS[i % 6], spin: i % 2 ? 1 : -1 }));
+// Lightweight confetti: 36 small views, one timer.
+function Confetti({ h }: { h: number }) {
+  const [t, setT] = useState(0);
+  useEffect(() => { const t0 = Date.now(); const iv = setInterval(() => setT((Date.now() - t0) / 1000), 40); const stop = setTimeout(() => clearInterval(iv), 6000); return () => { clearInterval(iv); clearTimeout(stop); }; }, []);
+  return (
+    <View style={StyleSheet.absoluteFill as any} pointerEvents="none" testID="confetti">
+      {PIECES.map((p, i) => { const k = Math.max(0, t - p.delay); const y = -20 + k * p.speed * h * 0.45; if (y > h + 20) return null; return (
+        <View key={i} style={{ position: 'absolute', left: `${p.x + Math.sin(k * 3 + i) * 3}%` as any, top: y, width: p.size, height: p.size * 0.6, backgroundColor: p.c, borderRadius: 2, transform: [{ rotate: `${k * 360 * p.spin}deg` }] }} />); })}
+    </View>);
+}
+
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('menu');
@@ -211,7 +224,7 @@ export default function App() {
   };
 
   const s = g.current;
-  const place = s.online ? 1 + Object.values(s.others).filter(o => !o.gone && (o.fin !== undefined || o.d > s.dist)).length : 1 + s.rivals.filter(r => r.d > s.dist).length;
+  const place = s.online && s.pod?.order.includes(s.me) ? s.pod.order.indexOf(s.me) + 1 : s.online ? 1 + Object.values(s.others).filter(o => !o.gone && (o.fin !== undefined || o.d > s.dist)).length : 1 + s.rivals.filter(r => r.d > s.dist).length;
   const Picker = ({ off }: { off?: boolean }) => (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 12 }}>
       {WORLD_IDS.map(id => (
@@ -372,6 +385,7 @@ export default function App() {
           </View>
         </View>
       )}
+      {mode === 'podium' && (!s.online || (s.pod?.order.length ?? 0) > 0) && <Confetti h={height} />}
     </View>
   );
 }
