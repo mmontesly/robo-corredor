@@ -55,7 +55,7 @@ function spaceRow(seed: number, row: number, diff = 1): string[] {
   return a;
 }
 const stormPlan = (seed: number) => { const r = rng(seed ^ 0x5eed); return { first: 7 + r() * 2, period: 9 + r() * 2 }; };
-type Rival = { skin?: number; row?: number; lane?: number; hopT?: number; name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
+type Rival = { b?: number; skin?: number; row?: number; lane?: number; hopT?: number; name: string; color: string; d: number; v: number; frozen?: number; slow?: number; cd?: number };
 type Proj = { d: number; from: string; to: string; life: number };
 type Puddle = { wx: number; owner: string; hit: string[]; lane?: number };
 const POWER_CD = 8;
@@ -126,10 +126,10 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, lvl: 0, lvlPop: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, lvl: 0, lvlPop: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[]; bat?: Record<number, number> }, bat: {} as Record<number, number> });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
-  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone });
+  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = { ...rankFrom(s), bat: { ...s.bat } }; if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone, bat: s.pod.bat });
     if (isHost && s.pod.order.length && serRef.current.champ < 0 && countedRef.current !== serRef.current.race && s.ids.every(i => s.pod!.order.includes(i) || s.pod!.gone.includes(i))) {
       countedRef.current = serRef.current.race; const w0 = s.pod.order[0]; const wins = { ...serRef.current.wins, [w0]: (serRef.current.wins[w0] ?? 0) + 1 };
       const sc = { wins, champ: wins[w0] >= boRef.current ? w0 : -1, race: serRef.current.race }; roomRef.current?.send({ t: 'score', ...sc }); applyScore(sc);
@@ -174,8 +174,8 @@ export default function App() {
       else s.puddles.push({ wx: m.at, owner: from, hit: [], lane: m.ln });
     }
     else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.k = typeof m.k === 'number' && m.k >= 0 && m.k < SKINS.length ? m.k : 0; o.z = m.z; o.c = m.c; o.g = m.g; o.sp = m.sp; o.seen = Date.now(); }
-    else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; publish(); }
-    else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone }; force(n => n + 1); }
+    else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; if (typeof m.b === 'number' && m.b >= 0 && m.b < 1000) s.bat[m.i] = Math.floor(m.b); publish(); }
+    else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone, bat: m.bat && typeof m.bat === 'object' ? m.bat : {} }; force(n => n + 1); }
     else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `${nameOf(m.i)} saiu`; publish(); } }
   };
   const onClose = () => {
@@ -253,7 +253,7 @@ export default function App() {
         s.slow = Math.max(0, s.slow - dt); s.boost = Math.max(0, s.boost - dt);
         target = 285 * (s.slow > 0 ? 0.5 : 1) * (s.boost > 0 ? 1.35 : 1);
         s.cd = Math.max(0, s.cd - dt);
-        s.rivals.forEach((r, k) => { r.frozen = Math.max(0, (r.frozen ?? 0) - dt); r.slow = Math.max(0, (r.slow ?? 0) - dt); if (!r.frozen && !W.space) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * (r.slow ? 0.5 : 1) * dt;
+        s.rivals.forEach((r, k) => { if (!r.frozen && s.dist < FINISH && Math.random() < dt * 0.35) r.b = (r.b ?? 0) + 1; r.frozen = Math.max(0, (r.frozen ?? 0) - dt); r.slow = Math.max(0, (r.slow ?? 0) - dt); if (!r.frozen && !W.space) r.d += (r.v + Math.sin(s.t * 1.3 + r.v) * 40) * (r.slow ? 0.5 : 1) * dt;
           r.cd = (r.cd ?? 6) - dt; if (r.cd <= 0) { r.cd = 7 + Math.random() * 6; const me = 'r' + k; const tgt = ahead(s, me); if (tgt && Math.random() < 0.6) s.projs.push({ d: r.d + 30, from: me, to: tgt, life: 1.5 }); else s.puddles.push(W.space ? { wx: (r.row ?? 0) * ROWD, owner: me, hit: [me], lane: r.lane ?? 1 } : { wx: r.d - 10, owner: me, hit: [] }); } });
         for (const pj of s.projs) { pj.life -= dt; pj.d += (W.space ? 2400 : 900) * dt; if (!pj.to) continue; if (pj.d >= posOf(s, pj.to)) { hitKey(s, pj.to); pj.life = 0; } }
         s.projs = s.projs.filter(pj => pj.life > 0);
@@ -276,7 +276,7 @@ export default function App() {
       }
       if (s.online) {
         s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, k: mySkin, d: s.dist, y: W.space ? s.sp.lane : s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
-        if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
+        if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; s.bat[s.me] = s.score; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t, b: s.score }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
         s.place = 1 + s.rivals.filter(r => r.d >= s.dist).length;
@@ -664,9 +664,10 @@ export default function App() {
                       <Text style={{ fontSize: 14, fontWeight: '800', color: '#023047' }}>{p.i === s.me ? `Você (${nameOf(p.i)})` : nameOf(p.i)}</Text>
                       <View style={[st.mini, { backgroundColor: PCOL[p.i], opacity: p.label === 'saiu' ? 0.3 : 1 }]} />
                       <View style={[st.step, { height: h[k], width: 60 }]}><Text style={[st.stepText, p.label === 'saiu' && { fontSize: 14 }]} testID={'place-' + p.i}>{p.label}</Text></View>
+                      <Text style={st.batTxt} testID={'bat-' + p.i}>{pod.bat?.[p.i] !== undefined ? `${pod.bat[p.i]}🔋` : p.i === s.me && s.finT[s.me] !== undefined ? `${s.score}🔋` : ' '}</Text>
                     </View>))}
               </View>
-              <Text style={st.sub}>{pending.length ? 'Esperando os outros robôs chegarem…' : `Você pegou ${s.score} bateria${s.score === 1 ? '' : 's'}!`}</Text>
+              {pending.length > 0 && <Text style={st.sub}>Esperando os outros robôs chegarem…</Text>}
               {ser.champ >= 0 && <Text style={[st.title, { color: '#FB5607', marginTop: 4 }]} testID="champ">{ser.champ === s.me ? 'Você venceu a série! 👑' : `${nameOf(ser.champ)} venceu a série! 👑`}</Text>}
               <View style={st.scoreBox} testID="scoreboard">
                 <Text style={st.scoreTitle}>🏆 Placar · primeiro a {bo} vitórias · corrida {ser.race}</Text>
@@ -684,15 +685,16 @@ export default function App() {
               </>); })() : mode === 'podium' ? (<>
               <Text style={st.title}>{s.place === 1 ? 'Nodex venceu! 🏆' : 'Que corrida! 🎉'}</Text>
               <View style={st.podium}>
-                {(() => { const list = [{ name: 'Nodex', color: '#4CC9F0', d: s.dist + (s.place === 1 ? 1e6 : 0) }, ...s.rivals].sort((x, y) => y.d - x.d); const top = list.slice(0, 3); const order = [top[1], top[0], top[2]]; const h = [70, 100, 50];
+                {(() => { const list = [{ name: 'Nodex', color: '#4CC9F0', d: s.dist + (s.place === 1 ? 1e6 : 0), b: s.score }, ...s.rivals].sort((x, y) => y.d - x.d); const top = list.slice(0, 3); const order = [top[1], top[0], top[2]]; const h = [70, 100, 50];
                   return order.map((r, i) => r && (
                     <View key={r.name} style={{ alignItems: 'center', marginHorizontal: 6 }}>
                       <Text style={{ fontSize: 16, fontWeight: '800', color: '#023047' }}>{r.name}</Text>
                       <View style={[st.mini, { backgroundColor: r.color }]} />
                       <View style={[st.step, { height: h[i] }]}><Text style={st.stepText}>{['2º', '1º', '3º'][i]}</Text></View>
+                      <Text style={st.batTxt}>{r.b ?? 0}🔋</Text>
                     </View>)); })()}
               </View>
-              <Text style={st.sub}>Nodex chegou em {ord[s.place - 1]} lugar e pegou {s.score} bateria{s.score === 1 ? '' : 's'}!</Text>
+              <Text style={st.sub}>Nodex chegou em {ord[s.place - 1]} lugar!</Text>
               {!!story && !!storyMsg && <Text style={[st.sub, { color: '#2B8A3E', fontWeight: '900', marginTop: 0 }]}>{storyMsg}</Text>}
             </>) : (<>
               <Text style={st.title}>{mode === 'menu' ? 'Nodex: Robô Corredor' : 'Tente de novo! 😄'}</Text>
@@ -808,6 +810,7 @@ const st = StyleSheet.create({
   skinInfo: { fontSize: 15, fontWeight: '800', color: '#9C36B5', textAlign: 'center', marginBottom: 6 },
   skinLabel: { fontSize: 9.5, lineHeight: 11, fontWeight: '800', color: '#023047', textAlign: 'center', paddingHorizontal: 2 },
   meters: { fontSize: 30, fontWeight: '900', color: '#FB5607' },
+  batTxt: { fontSize: 20, fontWeight: '900', color: '#023047', marginTop: 4 },
   scoreBox: { width: '100%', backgroundColor: '#FFF3BF', borderRadius: 16, padding: 10, marginTop: 10, borderWidth: 3, borderColor: '#FFB703' },
   scoreTitle: { fontSize: 15, fontWeight: '900', color: '#023047', textAlign: 'center', marginBottom: 6 },
   scoreRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
