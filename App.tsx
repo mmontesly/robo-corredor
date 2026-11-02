@@ -129,7 +129,11 @@ export default function App() {
   const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, lvl: 0, lvlPop: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[] } });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
   const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
-  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone }); force(n => n + 1); };
+  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = rankFrom(s); if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone });
+    if (isHost && s.pod.order.length && serRef.current.champ < 0 && countedRef.current !== serRef.current.race && s.ids.every(i => s.pod!.order.includes(i) || s.pod!.gone.includes(i))) {
+      countedRef.current = serRef.current.race; const w0 = s.pod.order[0]; const wins = { ...serRef.current.wins, [w0]: (serRef.current.wins[w0] ?? 0) + 1 };
+      const sc = { wins, champ: wins[w0] >= boRef.current ? w0 : -1, race: serRef.current.race }; roomRef.current?.send({ t: 'score', ...sc }); applyScore(sc);
+    } force(n => n + 1); };
   const g = useRef(fresh(false));
   const roomRef = useRef<Room | null>(null);
   const [nick, setNick] = useState(() => NICKS[Math.floor(Math.random() * NICKS.length)]);
@@ -139,6 +143,13 @@ export default function App() {
   const okNick = (n: any) => typeof n === 'string' && NICKS.includes(n);
   const [lv, setLv] = useState<{ view: 'choose' | 'join' | 'room' | 'wait'; code: string; err: string; ids: number[] }>({ view: 'choose', code: '', err: '', ids: [] });
   const [count, setCount] = useState(3);
+  // Série melhor de N: o host conta as vitórias e manda o placar para todos
+  const [bo, setBo] = useState(3); const boRef = useRef(3); boRef.current = bo;
+  const [ser, setSer] = useState<{ wins: Record<number, number>; champ: number; race: number }>({ wins: {}, champ: -1, race: 0 });
+  const serRef = useRef(ser); serRef.current = ser;
+  const countedRef = useRef(-1);
+  const resetSeries = () => { const z = { wins: {}, champ: -1, race: 0 }; serRef.current = z; setSer(z); countedRef.current = -1; };
+  const applyScore = (sc: { wins: Record<number, number>; champ: number; race: number }) => { serRef.current = sc; setSer(sc); if (sc.champ >= 0) { sfx(784, 0.15, 'triangle'); setTimeout(() => sfx(1046, 0.3, 'triangle'), 150); setTimeout(() => { roomRef.current?.close(); roomRef.current = null; }, 1500); } };
   const leaveRoom = () => { roomRef.current?.close(); roomRef.current = null; };
   const beginOnline = (seed: number, ids: number[], me: number, w: WorldId) => {
     setWorld(w); const n = fresh(true, seed); n.rivals = []; n.online = true; n.me = me; n.ids = ids;
@@ -152,7 +163,9 @@ export default function App() {
     const s = g.current;
     if (m.t === 'nick') { if (okNick(m.n) && m.i >= 0 && m.i < 4) { nicksRef.current = { ...nicksRef.current, [m.i]: m.n }; if (roomRef.current?.isHost) roomRef.current.send({ t: 'nicks', map: nicksRef.current }); force(n => n + 1); } return; }
     if (m.t === 'nicks') { const c: Record<number, string> = {}; for (const [k, v] of Object.entries(m.map || {})) if (okNick(v)) c[Number(k)] = v as string; nicksRef.current = c; force(n => n + 1); return; }
-    if (m.t === 'lobby') { setLv(v => ({ ...v, ids: m.ids })); if (roomRef.current?.isHost) { const keep: Record<number, string> = {}; m.ids.forEach(i => { if (nicksRef.current[i]) keep[i] = nicksRef.current[i]; }); nicksRef.current = keep; roomRef.current.send({ t: 'world', w: worldRef.current }); roomRef.current.send({ t: 'nicks', map: keep }); } }
+    if (m.t === 'bo') { if ([2, 3, 5].includes(m.n)) setBo(m.n); return; }
+    if (m.t === 'score') { if (!roomRef.current?.isHost && m.wins && typeof m.champ === 'number') applyScore({ wins: m.wins, champ: m.champ, race: m.race }); return; }
+    if (m.t === 'lobby') { setLv(v => ({ ...v, ids: m.ids })); if (roomRef.current?.isHost) { const keep: Record<number, string> = {}; m.ids.forEach(i => { if (nicksRef.current[i]) keep[i] = nicksRef.current[i]; }); nicksRef.current = keep; roomRef.current.send({ t: 'world', w: worldRef.current }); roomRef.current.send({ t: 'nicks', map: keep }); roomRef.current.send({ t: 'bo', n: boRef.current }); } }
     else if (m.t === 'world') { if (WORLDS[m.w as WorldId]) setWorld(m.w as WorldId); }
     else if (m.t === 'start') beginOnline(m.seed, m.ids, roomRef.current?.me ?? 0, (WORLDS[m.w as WorldId] ? m.w : 'fabrica') as WorldId);
     else if (s.online && m.t === 'pw' && s.others[m.i]) {
@@ -172,9 +185,9 @@ export default function App() {
     roomRef.current = null;
   };
   const errText = (e: any) => e === 'full' ? 'Essa sala está cheia ou já começou.' : e === 'peer-unavailable' || e === 'timeout' ? 'Sala não encontrada. Confira o número.' : 'Sem conexão. Tente de novo.';
-  const hostRoom = async () => { setLv({ view: 'wait', code: '', err: '', ids: [] }); try { const r = await createRoom({ onMsg, onClose }); roomRef.current = r; nicksRef.current = { 0: nickRef.current }; setLv({ view: 'room', code: r.code, err: '', ids: [0] }); } catch (e) { setLv({ view: 'choose', code: '', err: errText(e), ids: [] }); } };
-  const join = async (code: string) => { setLv(v => ({ ...v, view: 'wait', err: '' })); try { const r = await joinRoom(code, { onMsg, onClose }); roomRef.current = r; r.send({ t: 'nick', i: r.me, n: nickRef.current }); setLv(v => ({ view: 'room', code, err: '', ids: v.ids.length ? v.ids : [0, r.me] })); } catch (e) { setLv({ view: 'join', code: '', err: errText(e), ids: [] }); } };
-  const hostStart = () => { const r = roomRef.current; if (!r?.isHost) return; const ids = r.ids(); if (ids.length < 2) return; r.lock(); const seed = Math.floor(Math.random() * 1e9); r.send({ t: 'start', seed, ids, w: worldRef.current }); beginOnline(seed, ids, 0, worldRef.current); };
+  const hostRoom = async () => { resetSeries(); setLv({ view: 'wait', code: '', err: '', ids: [] }); try { const r = await createRoom({ onMsg, onClose }); roomRef.current = r; nicksRef.current = { 0: nickRef.current }; setLv({ view: 'room', code: r.code, err: '', ids: [0] }); } catch (e) { setLv({ view: 'choose', code: '', err: errText(e), ids: [] }); } };
+  const join = async (code: string) => { resetSeries(); setLv(v => ({ ...v, view: 'wait', err: '' })); try { const r = await joinRoom(code, { onMsg, onClose }); roomRef.current = r; r.send({ t: 'nick', i: r.me, n: nickRef.current }); setLv(v => ({ view: 'room', code, err: '', ids: v.ids.length ? v.ids : [0, r.me] })); } catch (e) { setLv({ view: 'join', code: '', err: errText(e), ids: [] }); } };
+  const hostStart = () => { const r = roomRef.current; if (!r?.isHost) return; const ids = r.ids(); if (ids.length < 2) return; if (serRef.current.champ >= 0) return; r.lock(); const nx = { ...serRef.current, race: serRef.current.race + 1 }; serRef.current = nx; setSer(nx); r.send({ t: 'score', ...nx }); const seed = Math.floor(Math.random() * 1e9); r.send({ t: 'start', seed, ids, w: worldRef.current }); beginOnline(seed, ids, 0, worldRef.current); };
   useEffect(() => {
     const iv = setInterval(() => {
       const s = g.current; if (!s.online) return;
@@ -524,6 +537,7 @@ export default function App() {
 
       {W.ice && s.storm > 0 && mode === 'play' && <View style={st.snow} pointerEvents="none"><Text style={st.snowText}>❄️  ❄️  ❄️{'\n'}  ❄️  ❄️  ❄️{'\n'}❄️  ❄️  ❄️</Text></View>}
       {!!W.quiz && mode === 'play' && !!(s.quiz || s.quizRes) && <View style={st.quizBox} pointerEvents="none">{!!s.quiz && <Text style={st.quizText}>{s.quiz}</Text>}{!!s.quizRes && <Text style={st.quizRes}>{s.quizRes}</Text>}</View>}
+      {s.online && (mode === 'play' || mode === 'count') && <Text style={st.hudScore} pointerEvents="none" testID="hud-score">🏆 {s.ids.map(i => `${i === s.me ? 'Você' : nameOf(i)} ${ser.wins[i] ?? 0}`).join(' · ')} (até {bo})</Text>}
       {!s.race && mode === 'play' && s.lvlPop > 0 && <Text style={st.speedPop} pointerEvents="none">⚡ Mais rápido! ⚡{'\n'}<Text style={{ fontSize: 18 }}>Velocidade {s.lvl + 1}</Text></Text>}
       {warn && <Text style={st.warn} pointerEvents="none">❄️ Tempestade! {s.coat ? '🧣 Você está protegido!' : 'Pegue a 🧣 ou entre no iglu!'}</Text>}
       <View style={[st.hud, W.space && { backgroundColor: '#0B132BF2', paddingBottom: 80 }]} pointerEvents="box-none">
@@ -575,6 +589,10 @@ export default function App() {
                 {[0, 1, 2, 3].map(i => <View key={i} style={{ alignItems: 'center', width: 72 }}><View style={[st.mini, { backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} /><Text style={{ fontSize: 13, fontWeight: '800', color: '#023047' }} testID={'nick-' + i}>{lv.ids.includes(i) ? nameOf(i) + (i === roomRef.current?.me ? ' (você)' : '') : '—'}</Text></View>)}
               </View>
               <Text style={st.sub}>{lv.ids.length}/{MAX} robôs na sala</Text>
+              <Text style={st.wname}>🏆 Série: quem ganhar primeiro</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginVertical: 6 }}>
+                {[2, 3, 5].map(n => <Pressable key={n} testID={'bo-' + n} accessibilityLabel={'serie ' + n} onPress={() => { if (!roomRef.current?.isHost) return; setBo(n); roomRef.current.send({ t: 'bo', n }); }} style={[st.chip, { paddingHorizontal: 18 }, bo === n && st.chipOn, !roomRef.current?.isHost && bo !== n && { opacity: 0.4 }]}><Text style={[st.chipText, { fontSize: 18 }]}>{n} vitórias</Text></Pressable>)}
+              </View>
               <Picker off={!roomRef.current?.isHost} />
               {roomRef.current?.isHost ? (
                 <Pressable style={[st.btn, lv.ids.length < 2 && { opacity: 0.4 }]} onPress={hostStart}><Text style={st.btnText}>{lv.ids.length < 2 ? 'Esperando…' : '▶ Começar'}</Text></Pressable>
@@ -649,6 +667,20 @@ export default function App() {
                     </View>))}
               </View>
               <Text style={st.sub}>{pending.length ? 'Esperando os outros robôs chegarem…' : `Você pegou ${s.score} bateria${s.score === 1 ? '' : 's'}!`}</Text>
+              {ser.champ >= 0 && <Text style={[st.title, { color: '#FB5607', marginTop: 4 }]} testID="champ">{ser.champ === s.me ? 'Você venceu a série! 👑' : `${nameOf(ser.champ)} venceu a série! 👑`}</Text>}
+              <View style={st.scoreBox} testID="scoreboard">
+                <Text style={st.scoreTitle}>🏆 Placar · primeiro a {bo} vitórias · corrida {ser.race}</Text>
+                {[...s.ids].sort((a, b) => (ser.wins[b] ?? 0) - (ser.wins[a] ?? 0) || a - b).map((i, k) => (
+                  <View key={i} style={st.scoreRow}><Text style={st.scorePos}>{k + 1}º</Text><View style={[st.dot, { backgroundColor: PCOL[i] }]} /><Text style={st.scoreName}>{i === s.me ? `Você (${nameOf(i)})` : nameOf(i)}{ser.champ === i ? ' 👑' : ''}</Text><Text style={st.scoreStars}>{'⭐'.repeat(ser.wins[i] ?? 0) || '—'} {ser.wins[i] ?? 0}</Text></View>))}
+              </View>
+              {ser.champ >= 0 ? (<>
+                <Text style={st.sub}>A série acabou! Para jogar de novo, entre no online outra vez.</Text>
+                <Pressable style={[st.mbtn, { backgroundColor: '#FB5607' }]} testID="again" onPress={() => { leaveRoom(); resetSeries(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Jogar de novo</Text></Pressable>
+                <Pressable style={[st.mbtn, { backgroundColor: '#ADB5BD' }]} onPress={() => { leaveRoom(); resetSeries(); g.current = fresh(false); setMode('menu'); }}><Text style={st.btnText}>🏠 Menu</Text></Pressable>
+              </>) : !pending.length && roomRef.current ? (roomRef.current.isHost ? (<>
+                <Picker />
+                <Pressable style={[st.mbtn, { backgroundColor: '#06D6A0' }]} testID="next-race" onPress={hostStart}><Text style={st.btnText}>▶ Próxima corrida</Text></Pressable>
+              </>) : <Text style={st.sub}>Esperando quem criou a sala começar a próxima corrida…</Text>) : null}
               </>); })() : mode === 'podium' ? (<>
               <Text style={st.title}>{s.place === 1 ? 'Nodex venceu! 🏆' : 'Que corrida! 🎉'}</Text>
               <View style={st.podium}>
@@ -667,7 +699,7 @@ export default function App() {
               <Text style={st.sub}>{mode === 'menu' ? `Toque para o Nodex pular. ${WORLDS[world].tip} Baterias dão turbo!` : `O Nodex correu ${meters(s.dist)} m e pegou ${s.score} bateria${s.score === 1 ? '' : 's'}! Recorde: ${best} m`}</Text>
             </>)}
             {mode === 'menu' && <Picker />}
-            {mode === 'podium' && !!story ? (<>
+            {mode === 'podium' && s.online ? (ser.champ < 0 && <Pressable style={[st.mbtn, { backgroundColor: '#ADB5BD' }]} onPress={() => { leaveRoom(); resetSeries(); g.current = fresh(false); setMode('menu'); }}><Text style={st.btnText}>🚪 Sair da sala</Text></Pressable>) : mode === 'podium' && !!story ? (<>
               {s.place <= 3 && (story.n < 5 || WORLD_IDS.indexOf(story.w) < WORLD_IDS.length - 1) && <Pressable style={st.btn} onPress={() => { const nx = story.n < 5 ? { w: story.w, n: story.n + 1 } : { w: WORLD_IDS[WORLD_IDS.indexOf(story.w) + 1], n: 1 }; start(true, nx); }}><Text style={st.btnText}>▶ Próxima fase</Text></Pressable>}
               <Pressable style={[st.btn, { backgroundColor: '#219EBC', marginTop: 14 }]} onPress={() => start(true, story)}><Text style={st.btnText}>↻ De novo</Text></Pressable>
               <Pressable style={[st.btn, { backgroundColor: '#FB5607', marginTop: 14 }]} onPress={() => { setStory(null); setMode('story'); }}><Text style={st.btnText}>🗺️ Mapa</Text></Pressable>
@@ -776,6 +808,14 @@ const st = StyleSheet.create({
   skinInfo: { fontSize: 15, fontWeight: '800', color: '#9C36B5', textAlign: 'center', marginBottom: 6 },
   skinLabel: { fontSize: 9.5, lineHeight: 11, fontWeight: '800', color: '#023047', textAlign: 'center', paddingHorizontal: 2 },
   meters: { fontSize: 30, fontWeight: '900', color: '#FB5607' },
+  scoreBox: { width: '100%', backgroundColor: '#FFF3BF', borderRadius: 16, padding: 10, marginTop: 10, borderWidth: 3, borderColor: '#FFB703' },
+  scoreTitle: { fontSize: 15, fontWeight: '900', color: '#023047', textAlign: 'center', marginBottom: 6 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  scorePos: { width: 34, fontSize: 18, fontWeight: '900', color: '#FB5607' },
+  dot: { width: 18, height: 18, borderRadius: 5, marginRight: 8, borderWidth: 2, borderColor: '#023047' },
+  scoreName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#023047' },
+  scoreStars: { fontSize: 16, fontWeight: '900', color: '#023047' },
+  hudScore: { position: 'absolute', top: 96, left: 10, right: 10, textAlign: 'center', fontSize: 14, fontWeight: '900', color: '#023047', backgroundColor: '#FFFFFFCC', borderRadius: 12, paddingVertical: 4 },
   speedPop: { position: 'absolute', top: 150, left: 20, right: 20, textAlign: 'center', fontSize: 34, fontWeight: '900', color: '#FB5607', backgroundColor: '#FFFFFFDD', borderRadius: 20, padding: 10 },
   powersTop: { bottom: 'auto' as any, top: 100, transform: [{ scale: 0.72 }], right: 0 },
   btnText: { fontSize: 28, fontWeight: '900', color: '#fff' },
