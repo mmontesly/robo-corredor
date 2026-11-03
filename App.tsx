@@ -24,8 +24,8 @@ const WORLD_IDS = Object.keys(WORLDS) as WorldId[];
 const hill = (w: World, wx: number) => w.hills ? 55 + 35 * Math.sin(wx / 260) + 15 * Math.sin(wx / 97) : 0;
 const pickKind = (r: number, w: World): Kind => w.ice ? (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery') : (r < 0.35 ? 'gear' : r < 0.6 ? 'oil' : 'battery');
 type Mode = 'story' | 'skins' | 'menu' | 'play' | 'over' | 'podium' | 'lobby' | 'count';
-const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0'];
-const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde'];
+const PCOL = ['#4CC9F0', '#FF006E', '#8338EC', '#06D6A0', '#FB5607', '#FFBE0B', '#3A86FF', '#8D6E63', '#E5383B', '#2B9348'];
+const PNAME = ['Azul', 'Rosa', 'Roxo', 'Verde', 'Laranja', 'Amarelo', 'Anil', 'Marrom', 'Vermelho', 'Folha'];
 // Apelidos só de uma lista pronta (sem texto livre = sem nomes reais/dados pessoais).
 const NICKS = ['Raio', 'Foguete', 'Turbo', 'Faísca', 'Pipoca', 'Trovão', 'Cometa', 'Bolinha', 'Pulinho', 'Parafuso', 'Estrela', 'Biscoito'];
 type Other = { dd?: number; dy?: number; v?: number; lt?: number; d: number; y: number; fin?: number; gone?: boolean; seen?: number; k?: number; z?: boolean; c?: boolean; g?: boolean; sp?: boolean };
@@ -161,7 +161,7 @@ export default function App() {
   };
   const onMsg = (m: Msg) => {
     const s = g.current;
-    if (m.t === 'nick') { if (okNick(m.n) && m.i >= 0 && m.i < 4) { nicksRef.current = { ...nicksRef.current, [m.i]: m.n }; if (roomRef.current?.isHost) roomRef.current.send({ t: 'nicks', map: nicksRef.current }); force(n => n + 1); } return; }
+    if (m.t === 'nick') { if (okNick(m.n) && m.i >= 0 && m.i < MAX) { nicksRef.current = { ...nicksRef.current, [m.i]: m.n }; if (roomRef.current?.isHost) roomRef.current.send({ t: 'nicks', map: nicksRef.current }); force(n => n + 1); } return; }
     if (m.t === 'nicks') { const c: Record<number, string> = {}; for (const [k, v] of Object.entries(m.map || {})) if (okNick(v)) c[Number(k)] = v as string; nicksRef.current = c; force(n => n + 1); return; }
     if (m.t === 'bo') { if ([2, 3, 5].includes(m.n)) setBo(m.n); return; }
     if (m.t === 'score') { if (!roomRef.current?.isHost && m.wins && typeof m.champ === 'number') applyScore({ wins: m.wins, champ: m.champ, race: m.race }); return; }
@@ -275,7 +275,7 @@ export default function App() {
         o.dy = W.space ? o.y : o.y <= 1 ? 0 : o.dy === undefined ? o.y : o.dy + (o.y - o.dy) * Math.min(1, dt * 15);
       }
       if (s.online) {
-        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = 0.066; roomRef.current?.send({ t: 's', i: s.me, k: mySkin, d: s.dist, y: W.space ? s.sp.lane : s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
+        s.sendT -= dt; if (s.sendT <= 0) { s.sendT = s.ids.length > 4 ? 0.12 : 0.066; roomRef.current?.send({ t: 's', i: s.me, k: mySkin, d: s.dist, y: W.space ? s.sp.lane : s.y, z: s.frozen > 0, c: s.coat, g: s.shelter > 0, sp: s.slow > 0 }); }
         if (s.dist >= FINISH) { s.myTime = s.t; s.finT[s.me] = s.t; s.bat[s.me] = s.score; roomRef.current?.send({ t: 'fin', i: s.me, time: s.t, b: s.score }); publish(); sfx(660, 0.15, 'triangle'); setTimeout(() => sfx(990, 0.3, 'triangle'), 160); buzz(60); setMode('podium'); force(n => n + 1); return; }
       }
       if (s.race && !s.online && s.dist >= FINISH) {
@@ -477,7 +477,7 @@ export default function App() {
               {s.puddles.map((pd, k) => pd.lane === undefined ? null : <View key={'spd' + k} style={{ position: 'absolute', left: lx(pd.lane) - 30, bottom: yOf(pd.wx / ROWD) + 18, width: 60, height: 14, borderRadius: 10, backgroundColor: '#3D348B', borderWidth: 2, borderColor: '#7B6CF6' }} />)}
               {s.projs.map((pj, k) => { const laneOf = (key: string) => key === 'me' ? s.sp.lane : key[0] === 'r' ? s.rivals[Number(key.slice(1))]?.lane ?? 1 : s.others[Number(key.slice(1))]?.y ?? 1; const fromL = laneOf(pj.from), toL = pj.to ? laneOf(pj.to) : fromL; const f0 = posOf(s, pj.from); const tg = pj.to ? posOf(s, pj.to) : f0 + 900; const fr = Math.max(0, Math.min(1, (pj.d - f0) / Math.max(1, tg - f0))); return <Text key={'spj' + k} testID="rocket" style={{ position: 'absolute', left: lx(fromL + (toL - fromL) * fr) - 18, bottom: yOf(pj.d / ROWD) + 50, fontSize: 36, transform: [{ rotate: '-45deg' }] }}>🎉</Text>; })}
               {s.race && s.rivals.map((r, k) => { const y = yOf(r.row ?? 0) + 17; return y < -80 || y > 1000 ? null : bot('r' + k, lx(r.lane ?? 1) + (k - 1) * 14, y, r.color, r.name, (r.slow ?? 0) > 0, 0.75, r.skin ?? 0); })}
-              {s.online && Object.entries(s.others).map(([k, o]) => { if (o.gone) return null; const i = Number(k); const y = yOf((o.dd ?? o.d) / ROWD) + 18; return y < -80 || y > 1000 ? null : bot('p' + i, lx(o.y ?? 1) + (i - s.me) * 12, y, PCOL[i], nameOf(i), !!o.sp, 0.8, o.k ?? 0); })}
+              {s.online && Object.entries(s.others).map(([k, o]) => { if (o.gone) return null; const i = Number(k); const y = yOf((o.dd ?? o.d) / ROWD) + 18; return y < -80 || y > 1000 ? null : bot('p' + i, lx(o.y ?? 1) + (i - s.me) * 18, y, PCOL[i], nameOf(i), !!o.sp, 0.8, o.k ?? 0); })}
               {bot('me', lx(myLane), yOf(s.sp.row) + 22 + Math.sin(Math.PI * Math.min(1, s.sp.hop)) * (spaceRow(s.seed, s.sp.row + 1, s.diff)[s.sp.tl] === '_' ? 60 : 140) * (s.sp.hop > 0 ? 1 : 0), PCOL[s.online ? s.me : 0], s.online ? 'Você' : '', s.slow > 0, 1, mySkin)}
               {[0, 1, 2].map(c => <View key={'z' + c} style={{ position: 'absolute', left: (c * width) / 3, width: width / 3, top: 120, bottom: 0, borderLeftWidth: c ? 1 : 0, borderColor: '#FFFFFF22' }} />)}
               <Text style={st.spaceHint} pointerEvents="none">👆 Toque na coluna do asteroide amarelo para pular!</Text>
@@ -521,23 +521,23 @@ export default function App() {
           {s.race && s.puddles.map((pd, k) => { const x = 60 + pd.wx - s.dist; return x > -80 && x < width + 40 ? <View key={'pd' + k} style={[st.oil, { left: x, bottom: gy(pd.wx) - 6, backgroundColor: '#3D348B' }]} /> : null; })}
           {s.race && s.projs.map((pj, k) => { const x = 60 + pj.d - s.dist; return x > -60 && x < width + 40 ? <Text key={'pj' + k} style={{ position: 'absolute', left: x, bottom: gy(pj.d) + 40, fontSize: 30, transform: [{ rotate: '45deg' }] }}>🎉</Text> : null; })}
           {s.race && (() => { const fx = 60 + FINISH - s.dist; return fx < width + 20 ? <View style={[st.finish, { left: fx + ROBOT, bottom: gy(FINISH) }]}><Text style={st.flag}>🏁</Text></View> : null; })()}
-          {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const od = o.dd ?? o.d; const x = 60 + (od - s.dist) + (i - s.me) * 26; if (o.gone || x < -80 || x > width + 80) return null; return (
-            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(od + (i - s.me) * 26) + (o.y > 1 ? (o.dy ?? o.y) : 0), opacity: 0.9, transform: o.sp ? [{ rotate: `${(s.t * 720) % 360}deg` }] : [] }]}>
-              <RobotBody color={PCOL[i]} skin={(o.k ?? 0)} t={s.t} /><Text style={[st.tag, { top: -40 - i * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} g={o.g} />
+          {s.online && Object.entries(s.others).map(([k, o]) => { const i = Number(k); const od = o.dd ?? o.d; const x = 60 + (od - s.dist) + (i - s.me) * 18; if (o.gone || x < -80 || x > width + 80) return null; return (
+            <View key={'p' + i} style={[st.robot, { left: x, bottom: gy(od + (i - s.me) * 18) + (o.y > 1 ? (o.dy ?? o.y) : 0), opacity: 0.9, transform: o.sp ? [{ rotate: `${(s.t * 720) % 360}deg` }] : [] }]}>
+              <RobotBody color={PCOL[i]} skin={(o.k ?? 0)} t={s.t} /><Text style={[st.tag, { top: -40 - (i % 4) * 16, color: PCOL[i] }]}>{nameOf(i)}</Text><Extras z={o.z} c={o.c} g={o.g} />
             </View>); })}
           {s.race && s.rivals.map((r, i) => { const x = 60 + (r.d - s.dist) + (i + 1) * 8; if (x < -80 || x > width + 80) return null; return (
             <View key={r.name} style={[st.robot, { left: x, bottom: gy(s.dist + x - 60), opacity: 0.9, transform: [{ scale: 0.85 }, { rotate: r.slow ? `${(1 - r.slow) * 360}deg` : '0deg' }] }]}>
               <RobotBody color={r.color} skin={(r.skin ?? 0)} t={s.t} /><Text style={st.tag}>{r.name}</Text><Extras z={(r.frozen ?? 0) > 0} />
             </View>); })}
           <View style={[st.robot, { left: 60, bottom: gy(s.dist) + s.y, transform: s.slow > 0 && s.race ? [{ rotate: `${(1 - s.slow) * 360}deg` }] : [] }]}>
-            <RobotBody color={PCOL[s.online ? s.me : 0]} skin={mySkin} t={s.t} />{s.online && <Text style={[st.tag, { top: -40 - s.me * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} g={s.shelter > 0} />
+            <RobotBody color={PCOL[s.online ? s.me : 0]} skin={mySkin} t={s.t} />{s.online && <Text style={[st.tag, { top: -40 - (s.me % 4) * 16 }]}>Você</Text>}<Extras z={s.frozen > 0} c={s.coat} g={s.shelter > 0} />
           </View>
         </View>)}
       </Pressable>
 
       {W.ice && s.storm > 0 && mode === 'play' && <View style={st.snow} pointerEvents="none"><Text style={st.snowText}>❄️  ❄️  ❄️{'\n'}  ❄️  ❄️  ❄️{'\n'}❄️  ❄️  ❄️</Text></View>}
       {!!W.quiz && mode === 'play' && !!(s.quiz || s.quizRes) && <View style={st.quizBox} pointerEvents="none">{!!s.quiz && <Text style={st.quizText}>{s.quiz}</Text>}{!!s.quizRes && <Text style={st.quizRes}>{s.quizRes}</Text>}</View>}
-      {s.online && (mode === 'play' || mode === 'count') && <Text style={st.hudScore} pointerEvents="none" testID="hud-score">🏆 {s.ids.map(i => `${i === s.me ? 'Você' : nameOf(i)} ${ser.wins[i] ?? 0}`).join(' · ')} (até {bo})</Text>}
+      {s.online && (mode === 'play' || mode === 'count') && <Text style={[st.hudScore, s.ids.length > 4 && { fontSize: 11 }]} pointerEvents="none" testID="hud-score">🏆 {s.ids.map(i => `${i === s.me ? 'Você' : nameOf(i)} ${ser.wins[i] ?? 0}`).join(' · ')} (até {bo})</Text>}
       {!s.race && mode === 'play' && s.lvlPop > 0 && <Text style={st.speedPop} pointerEvents="none">⚡ Mais rápido! ⚡{'\n'}<Text style={{ fontSize: 18 }}>Velocidade {s.lvl + 1}</Text></Text>}
       {warn && <Text style={st.warn} pointerEvents="none">❄️ Tempestade! {s.coat ? '🧣 Você está protegido!' : 'Pegue a 🧣 ou entre no iglu!'}</Text>}
       <View style={[st.hud, W.space && { backgroundColor: '#0B132BF2', paddingBottom: 80 }]} pointerEvents="box-none">
@@ -585,8 +585,8 @@ export default function App() {
             {lv.view === 'room' && (<>
               <Text style={st.sub}>Número da sala:</Text>
               <Text style={st.codeBox}>{lv.code.split('').join(' ')}</Text>
-              <View style={{ flexDirection: 'row', marginVertical: 12 }}>
-                {[0, 1, 2, 3].map(i => <View key={i} style={{ alignItems: 'center', width: 72 }}><View style={[st.mini, { backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} /><Text style={{ fontSize: 13, fontWeight: '800', color: '#023047' }} testID={'nick-' + i}>{lv.ids.includes(i) ? nameOf(i) + (i === roomRef.current?.me ? ' (você)' : '') : '—'}</Text></View>)}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 8 }}>
+                {Array.from({ length: MAX }, (_, i) => i).map(i => <View key={i} style={{ alignItems: 'center', width: 72, marginBottom: 4 }}><View style={[st.mini, { backgroundColor: lv.ids.includes(i) ? PCOL[i] : '#E9ECEF' }]} /><Text style={{ fontSize: 13, fontWeight: '800', color: '#023047' }} testID={'nick-' + i}>{lv.ids.includes(i) ? nameOf(i) + (i === roomRef.current?.me ? ' (você)' : '') : '—'}</Text></View>)}
               </View>
               <Text style={st.sub}>{lv.ids.length}/{MAX} robôs na sala</Text>
               <Text style={st.wname}>🏆 Série: quem ganhar primeiro</Text>
@@ -655,7 +655,7 @@ export default function App() {
               const pod = s.pod ?? { order: [], gone: [] };
               const pending = s.ids.filter(i => !pod.order.includes(i) && !pod.gone.includes(i));
               const list = [...pod.order.map((i, k) => ({ i, label: `${k + 1}º` })), ...pending.map(i => ({ i, label: '…' })), ...pod.gone.map(i => ({ i, label: 'saiu' }))];
-              const vis = [list[1], list[0], list[2], list[3]]; const h = [70, 100, 50, 35];
+              const vis = [list[1], list[0], list[2]]; const h = [70, 100, 50]; const rest = list.slice(3);
               return (<>
               <Text style={st.title}>{pod.order[0] === s.me ? 'Você venceu! 🏆' : pod.order.length ? 'Que corrida! 🎉' : 'Chegou! 🏁'}</Text>
               <View style={st.podium}>
@@ -667,6 +667,9 @@ export default function App() {
                       <Text style={st.batTxt} testID={'bat-' + p.i}>{pod.bat?.[p.i] !== undefined ? `${pod.bat[p.i]}🔋` : p.i === s.me && s.finT[s.me] !== undefined ? `${s.score}🔋` : ' '}</Text>
                     </View>))}
               </View>
+              {rest.length > 0 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 }}>
+                {rest.map(p => <View key={p.i} style={st.restChip}><Text style={[st.restTxt, { color: '#FB5607' }]} testID={'place-' + p.i}>{p.label}</Text><View style={[st.dot, { backgroundColor: PCOL[p.i], opacity: p.label === 'saiu' ? 0.3 : 1, marginLeft: 4, marginRight: 4 }]} /><Text style={st.restTxt} numberOfLines={1}>{p.i === s.me ? 'Você' : nameOf(p.i)}</Text><Text style={[st.restTxt, { marginLeft: 4 }]} testID={'bat-' + p.i}>{pod.bat?.[p.i] !== undefined ? `${pod.bat[p.i]}🔋` : p.i === s.me && s.finT[s.me] !== undefined ? `${s.score}🔋` : ''}</Text></View>)}
+              </View>}
               {pending.length > 0 && <Text style={st.sub}>Esperando os outros robôs chegarem…</Text>}
               {ser.champ >= 0 && <Text style={[st.title, { color: '#FB5607', marginTop: 4 }]} testID="champ">{ser.champ === s.me ? 'Você venceu a série! 👑' : `${nameOf(ser.champ)} venceu a série! 👑`}</Text>}
               <View style={st.scoreBox} testID="scoreboard">
@@ -759,7 +762,7 @@ const st = StyleSheet.create({
   barFill: { height: 10, backgroundColor: '#06D6A0' },
   finish: { position: 'absolute', bottom: GROUND, width: 14, height: 160, backgroundColor: '#fff', borderWidth: 3, borderColor: '#023047' },
   flag: { position: 'absolute', top: -40, left: -6, fontSize: 36 },
-  tag: { position: 'absolute', top: -40, fontSize: 13, fontWeight: '800', color: '#023047' },
+  tag: { position: 'absolute', top: -40, width: 96, left: -20, textAlign: 'center', fontSize: 13, fontWeight: '800', color: '#023047', whiteSpace: 'nowrap', textShadowColor: '#fff', textShadowRadius: 3 } as any,
   podium: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 16 },
   mini: { width: 34, height: 34, borderRadius: 8, borderWidth: 3, borderColor: '#023047', marginVertical: 4 },
   step: { width: 70, backgroundColor: '#FFB703', borderTopLeftRadius: 10, borderTopRightRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -810,6 +813,8 @@ const st = StyleSheet.create({
   skinInfo: { fontSize: 15, fontWeight: '800', color: '#9C36B5', textAlign: 'center', marginBottom: 6 },
   skinLabel: { fontSize: 9.5, lineHeight: 11, fontWeight: '800', color: '#023047', textAlign: 'center', paddingHorizontal: 2 },
   meters: { fontSize: 30, fontWeight: '900', color: '#FB5607' },
+  restChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F3F5', borderRadius: 14, paddingHorizontal: 8, paddingVertical: 4, margin: 3, width: '47%' },
+  restTxt: { fontSize: 14, fontWeight: '800', color: '#023047', flexShrink: 1 },
   batTxt: { fontSize: 20, fontWeight: '900', color: '#023047', marginTop: 4 },
   scoreBox: { width: '100%', backgroundColor: '#FFF3BF', borderRadius: 16, padding: 10, marginTop: 10, borderWidth: 3, borderColor: '#FFB703' },
   scoreTitle: { fontSize: 15, fontWeight: '900', color: '#023047', textAlign: 'center', marginBottom: 6 },

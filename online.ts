@@ -9,7 +9,7 @@ export type Msg =
 export type Room = { code: string; me: number; isHost: boolean; send: (m: Msg) => void; close: () => void; ids: () => number[]; lock: () => void };
 export type Handlers = { onMsg: (m: Msg) => void; onClose: () => void };
 
-export const MAX = 4;
+export const MAX = 10;
 const PREFIX = 'nodex-robocorredor-v1-';
 export const onlineAvailable = () => Platform.OS === 'web' && typeof window !== 'undefined' && 'RTCPeerConnection' in window;
 const makePeer = async (id?: string): Promise<any> => { const { default: Peer } = await import('peerjs'); return id ? new Peer(id) : new Peer(); };
@@ -19,7 +19,7 @@ export async function createRoom(h: Handlers, tries = 5): Promise<Room> {
   const peer = await makePeer(PREFIX + code);
   const conns = new Map<number, any>();
   let locked = false;
-  const ids = () => [0, ...conns.keys()].sort();
+  const ids = () => [0, ...conns.keys()].sort((a, b) => a - b);
   const bcast = (m: Msg, except?: number) => conns.forEach((c, i) => { if (i !== except && c.open) c.send(m); });
   return new Promise((resolve, reject) => {
     let opened = false;
@@ -30,7 +30,7 @@ export async function createRoom(h: Handlers, tries = 5): Promise<Room> {
     });
     peer.on('connection', (c: any) => {
       c.on('open', () => {
-        const free = [1, 2, 3].find(i => !conns.has(i));
+        const free = Array.from({ length: MAX - 1 }, (_, k) => k + 1).find(i => !conns.has(i));
         if (locked || free === undefined) { c.send({ t: 'full' }); setTimeout(() => c.close(), 500); return; }
         conns.set(free, c);
         c.send({ t: 'hello', you: free });
