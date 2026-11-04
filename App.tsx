@@ -112,6 +112,8 @@ function Confetti({ h }: { h: number }) {
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('menu');
+  const modeRef = useRef<Mode>('menu'); modeRef.current = mode;
+  const [pickW, setPickW] = useState(false);
   const loadJ = (k: string, d: any) => { try { const v = (globalThis as any).localStorage?.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
   const saveJ = (k: string, v: any) => { try { (globalThis as any).localStorage?.setItem(k, JSON.stringify(v)); } catch {} };
   const [done, setDone] = useState<number[]>(() => loadJ('robo-corredor-story', []));
@@ -126,11 +128,14 @@ export default function App() {
   const [muted, setMuted] = useState(false);
   const [best, setBest] = useState(0);
   const [, force] = useState(0);
-  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, lvl: 0, lvlPop: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[]; bat?: Record<number, number> }, bat: {} as Record<number, number> });
+  const fresh = (race: boolean, seed = Math.floor(Math.random() * 1e9)) => ({ w: worldRef.current, seed, coat: false, frozen: 0, storm: 0, stormAt: stormPlan(seed).first, period: stormPlan(seed).period, y: 0, vy: 0, objs: [] as Obj[], score: 0, speed: 260, dist: 0, next: 1.2, id: 0, t: 0, race, slow: 0, boost: 0, rivals: newRivals().map((r, k) => ({ ...r, cd: 5 + k * 2.5 })), place: 0, projs: [] as Proj[], puddles: [] as Puddle[], cd: 2, online: false, me: 0, ids: [0] as number[], others: {} as Record<number, Other>, track: [] as ReturnType<typeof makeTrack>, myTime: 0, sendT: 0, lvl: 0, lvlPop: 0, sp: { row: 0, lane: 1, hop: 0, tl: 1, fail: false }, gotB: {} as Record<string, boolean>, diff: 2, spTheme: 0, quizAt: 3.5, quizN: 0, quiz: '', quizRes: '', prepScarf: -1, shelter: 0, prepIgloo: -1, note: '', finT: {} as Record<number, number>, pod: null as null | { order: number[]; gone: number[]; bat?: Record<number, number>; done?: boolean }, bat: {} as Record<number, number>, dnf: [] as number[], endAt: 0 });
   // Single source of truth for the online podium: the host (or, if the host left, each phone locally) ranks by race time, ties by player number.
-  const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: Object.entries(s.others).filter(([i, o]) => o.gone && s.finT[Number(i)] === undefined).map(([i]) => Number(i)) });
-  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = { ...rankFrom(s), bat: { ...s.bat } }; if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone, bat: s.pod.bat });
-    if (isHost && s.pod.order.length && serRef.current.champ < 0 && countedRef.current !== serRef.current.race && s.ids.every(i => s.pod!.order.includes(i) || s.pod!.gone.includes(i))) {
+  const rankFrom = (s: ReturnType<typeof fresh>) => ({ order: Object.entries(s.finT).map(([i, t]) => [Number(i), t] as const).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(x => x[0]), gone: s.ids.filter(i => s.finT[i] === undefined && (s.dnf.includes(i) || (i !== s.me && (!s.others[i] || s.others[i].gone)))) });
+  const publish = () => { const s = g.current; if (!s.online) return; const isHost = roomRef.current?.isHost; if (!isHost && roomRef.current) return; s.pod = { ...rankFrom(s), bat: { ...s.bat } }; const done = s.ids.every(i => s.pod!.order.includes(i) || s.pod!.gone.includes(i)); s.pod.done = done;
+    if (s.pod.order.length && !s.endAt) s.endAt = Date.now() + 20000; // corrida acaba 20 s depois do 1º chegar
+    if (isHost) roomRef.current?.send({ t: 'podium', order: s.pod.order, gone: s.pod.gone, bat: s.pod.bat, done, dnf: s.dnf });
+    if (done && modeRef.current === 'play') setMode('podium');
+    if (isHost && s.pod.order.length && serRef.current.champ < 0 && countedRef.current !== serRef.current.race && done) {
       countedRef.current = serRef.current.race; const w0 = s.pod.order[0]; const wins = { ...serRef.current.wins, [w0]: (serRef.current.wins[w0] ?? 0) + 1 };
       const sc = { wins, champ: wins[w0] >= boRef.current ? w0 : -1, race: serRef.current.race }; roomRef.current?.send({ t: 'score', ...sc }); applyScore(sc);
     } force(n => n + 1); };
@@ -152,7 +157,7 @@ export default function App() {
   const applyScore = (sc: { wins: Record<number, number>; champ: number; race: number }) => { serRef.current = sc; setSer(sc); if (sc.champ >= 0) { sfx(784, 0.15, 'triangle'); setTimeout(() => sfx(1046, 0.3, 'triangle'), 150); setTimeout(() => { roomRef.current?.close(); roomRef.current = null; }, 1500); } };
   const leaveRoom = () => { roomRef.current?.close(); roomRef.current = null; };
   const beginOnline = (seed: number, ids: number[], me: number, w: WorldId) => {
-    setWorld(w); const n = fresh(true, seed); n.rivals = []; n.online = true; n.me = me; n.ids = ids;
+    setWorld(w); setPickW(false); const n = fresh(true, seed); n.rivals = []; n.online = true; n.me = me; n.ids = ids;
     n.track = makeTrack(seed, WORLDS[w]); n.objs = n.track.map((t, i) => ({ id: i, x: 9999, kind: t.kind, y: t.y }));
     ids.filter(i => i !== me).forEach(i => { n.others[i] = { d: 0, y: 0, seen: Date.now() + 4000 }; });
     g.current = n; setCount(3); setMode('count');
@@ -174,12 +179,13 @@ export default function App() {
       else s.puddles.push({ wx: m.at, owner: from, hit: [], lane: m.ln });
     }
     else if (s.online && m.t === 's' && s.others[m.i]) { const o = s.others[m.i]; const now = Date.now(); if (o.lt) { const dtm = (now - o.lt) / 1000; if (dtm > 0.01) o.v = Math.max(0, Math.min(500, (m.d - o.d) / dtm)); } o.lt = now; o.d = m.d; o.y = m.y; o.k = typeof m.k === 'number' && m.k >= 0 && m.k < SKINS.length ? m.k : 0; o.z = m.z; o.c = m.c; o.g = m.g; o.sp = m.sp; o.seen = Date.now(); }
-    else if (s.online && m.t === 'fin' && s.others[m.i]) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; if (typeof m.b === 'number' && m.b >= 0 && m.b < 1000) s.bat[m.i] = Math.floor(m.b); publish(); }
-    else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone, bat: m.bat && typeof m.bat === 'object' ? m.bat : {} }; force(n => n + 1); }
+    else if (s.online && m.t === 'fin' && s.others[m.i] && !s.pod?.done) { s.others[m.i].fin = m.time; s.finT[m.i] = m.time; if (typeof m.b === 'number' && m.b >= 0 && m.b < 1000) s.bat[m.i] = Math.floor(m.b); publish(); }
+    else if (s.online && m.t === 'podium' && !roomRef.current?.isHost) { s.pod = { order: m.order, gone: m.gone, bat: m.bat && typeof m.bat === 'object' ? m.bat : {}, done: !!m.done }; if (Array.isArray(m.dnf)) s.dnf = m.dnf; if (m.done && modeRef.current === 'play') setMode('podium'); force(n => n + 1); }
     else if (m.t === 'left') { if (s.online && s.others[m.i]) { s.others[m.i].gone = true; s.note = `${nameOf(m.i)} saiu`; publish(); } }
   };
   const onClose = () => {
     const s = g.current;
+    if (s.online && s.pod?.done) { roomRef.current = null; force(n => n + 1); return; }
     if (s.online) { Object.values(s.others).forEach(o => { o.gone = true; }); s.note = 'A sala fechou. Continue correndo!'; roomRef.current = null; publish(); force(n => n + 1); return; }
     else setLv({ view: 'choose', code: '', err: 'A sala fechou.', ids: [] });
     roomRef.current = null;
@@ -194,6 +200,7 @@ export default function App() {
       if (mode === 'podium') roomRef.current?.send({ t: 's', i: s.me, k: mySkin, d: s.dist, y: 0 });
       let ch = false;
       for (const [k, o] of Object.entries(s.others)) if (!o.gone && o.fin === undefined && Date.now() - (o.seen ?? 0) > 6000) { o.gone = true; s.note = `${nameOf(Number(k))} saiu`; ch = true; }
+      if (s.endAt && Date.now() > s.endAt && (roomRef.current?.isHost || !roomRef.current) && !s.pod?.done) { s.dnf = s.ids.filter(i => s.finT[i] === undefined && (i === s.me || (s.others[i] && !s.others[i].gone))); s.note = 'Tempo esgotado! ⏱️'; ch = true; }
       if (ch) publish();
     }, 700);
     const bye = () => roomRef.current?.close();
@@ -544,7 +551,7 @@ export default function App() {
         <Text style={[st.score, W.space && { color: '#fff' }]}>🔋 {s.score}</Text>
         {s.race ? (
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={st.place}>{ord[place - 1]} lugar</Text>
+            <Text style={st.place}>{place}º lugar</Text>
             <View style={st.bar}><View style={[st.barFill, { width: `${Math.min(100, (s.dist / FINISH) * 100)}%` }]} /></View>
           </View>
         ) : <View style={{ flex: 1, alignItems: 'center' }}><Text style={st.meters} testID="meters">📏 {meters(s.dist)} m</Text><Text style={[st.best, { flex: 0 }]}>Recorde: {best} m</Text></View>}
@@ -650,14 +657,14 @@ export default function App() {
       {mode !== 'play' && mode !== 'lobby' && mode !== 'count' && mode !== 'story' && mode !== 'skins' && (
         <View style={st.overlay} pointerEvents="box-none">
           <View style={[st.card, { maxHeight: height - 30, paddingHorizontal: 18 }]}>
-          <ScrollView style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center' }}>
+          <ScrollView key={mode + ':' + ser.race + ':' + s.seed} style={{ width: '100%' }} contentContainerStyle={{ alignItems: 'center' }}>
             {mode === 'podium' && s.online ? (() => {
               const pod = s.pod ?? { order: [], gone: [] };
               const pending = s.ids.filter(i => !pod.order.includes(i) && !pod.gone.includes(i));
-              const list = [...pod.order.map((i, k) => ({ i, label: `${k + 1}º` })), ...pending.map(i => ({ i, label: '…' })), ...pod.gone.map(i => ({ i, label: 'saiu' }))];
+              const list = [...pod.order.map((i, k) => ({ i, label: `${k + 1}º` })), ...pending.map(i => ({ i, label: '…' })), ...pod.gone.map(i => ({ i, label: s.dnf.includes(i) ? '⏱️' : 'saiu' }))];
               const vis = [list[1], list[0], list[2]]; const h = [70, 100, 50]; const rest = list.slice(3);
               return (<>
-              <Text style={st.title}>{pod.order[0] === s.me ? 'Você venceu! 🏆' : pod.order.length ? 'Que corrida! 🎉' : 'Chegou! 🏁'}</Text>
+              <Text style={st.title} testID="pod-title">{!pod.done ? 'Chegou! 🏁' : pod.order[0] === s.me ? 'Você venceu! 🏆' : 'Que corrida! 🎉'}</Text>
               <View style={st.podium}>
                 {vis.map((p, k) => p && (
                     <View key={p.i} style={{ alignItems: 'center', marginHorizontal: 4 }}>
@@ -670,7 +677,7 @@ export default function App() {
               {rest.length > 0 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 }}>
                 {rest.map(p => <View key={p.i} style={st.restChip}><Text style={[st.restTxt, { color: '#FB5607' }]} testID={'place-' + p.i}>{p.label}</Text><View style={[st.dot, { backgroundColor: PCOL[p.i], opacity: p.label === 'saiu' ? 0.3 : 1, marginLeft: 4, marginRight: 4 }]} /><Text style={st.restTxt} numberOfLines={1}>{p.i === s.me ? 'Você' : nameOf(p.i)}</Text><Text style={[st.restTxt, { marginLeft: 4 }]} testID={'bat-' + p.i}>{pod.bat?.[p.i] !== undefined ? `${pod.bat[p.i]}🔋` : p.i === s.me && s.finT[s.me] !== undefined ? `${s.score}🔋` : ''}</Text></View>)}
               </View>}
-              {pending.length > 0 && <Text style={st.sub}>Esperando os outros robôs chegarem…</Text>}
+              {!pod.done && <Text style={st.sub}>Esperando os outros robôs… (no máximo 20 s)</Text>}
               {ser.champ >= 0 && <Text style={[st.title, { color: '#FB5607', marginTop: 4 }]} testID="champ">{ser.champ === s.me ? 'Você venceu a série! 👑' : `${nameOf(ser.champ)} venceu a série! 👑`}</Text>}
               <View style={st.scoreBox} testID="scoreboard">
                 <Text style={st.scoreTitle}>🏆 Placar · primeiro a {bo} vitórias · corrida {ser.race}</Text>
@@ -681,8 +688,8 @@ export default function App() {
                 <Text style={st.sub}>A série acabou! Para jogar de novo, entre no online outra vez.</Text>
                 <Pressable style={[st.mbtn, { backgroundColor: '#FB5607' }]} testID="again" onPress={() => { leaveRoom(); resetSeries(); g.current = fresh(false); setLv({ view: 'choose', code: '', err: '', ids: [] }); setMode('lobby'); }}><Text style={st.btnText}>👥 Jogar de novo</Text></Pressable>
                 <Pressable style={[st.mbtn, { backgroundColor: '#ADB5BD' }]} onPress={() => { leaveRoom(); resetSeries(); g.current = fresh(false); setMode('menu'); }}><Text style={st.btnText}>🏠 Menu</Text></Pressable>
-              </>) : !pending.length && roomRef.current ? (roomRef.current.isHost ? (<>
-                <Picker />
+              </>) : pod.done && roomRef.current ? (roomRef.current.isHost ? (<>
+                {pickW ? <Picker /> : <Pressable onPress={() => setPickW(true)}><Text style={[st.sub, { textDecorationLine: 'underline' }]}>🌍 Mudar mundo ({WORLDS[world].name})</Text></Pressable>}
                 <Pressable style={[st.mbtn, { backgroundColor: '#06D6A0' }]} testID="next-race" onPress={hostStart}><Text style={st.btnText}>▶ Próxima corrida</Text></Pressable>
               </>) : <Text style={st.sub}>Esperando quem criou a sala começar a próxima corrida…</Text>) : null}
               </>); })() : mode === 'podium' ? (<>
@@ -728,7 +735,7 @@ export default function App() {
             <Pressable style={[st.pbtn, { backgroundColor: '#3D348B' }]} testID="ui-oil" onPress={Platform.OS === 'web' ? undefined : () => usePower('oil')} accessibilityLabel="soltar oleo"><Text style={st.pbtnText}>💧</Text><Text style={st.plabel}>Óleo</Text></Pressable>
           </>)}
         </View>)}
-      {mode === 'podium' && (!s.online || (s.pod?.order.length ?? 0) > 0) && <Confetti h={height} />}
+      {mode === 'podium' && (!s.online || !!s.pod?.done) && <Confetti h={height} />}
     </View>
   );
 }
