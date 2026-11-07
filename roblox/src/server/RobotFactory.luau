@@ -56,7 +56,7 @@ end
 
 function RobotFactory.install()
 	if Course.HIP ~= HIP then
-		error("[Nodex] O rig do robô foi medido para HipHeight 3.")
+		error("[Nodex] O centro do root foi medido a 3 studs da sola.")
 	end
 
 	local existing = StarterPlayer:FindFirstChild("StarterCharacter")
@@ -178,7 +178,11 @@ function RobotFactory.install()
 	local humanoid = Instance.new("Humanoid")
 	humanoid.Name = "Humanoid"
 	humanoid.RigType = Enum.HumanoidRigType.R6
-	humanoid.HipHeight = Course.HIP
+	-- Pernas de 2, root de altura 2, sola 3 studs abaixo do centro do root.
+	-- HipHeight R6 = 3 - 2 - 1 = 0. Com 3 o motor deixa o root a 6 e sobra vão de 3.
+	local legLength = 2
+	local rootHeight = 2
+	humanoid.HipHeight = Rules.r6HipHeightForFeet(legLength, rootHeight, Course.HIP)
 	humanoid.UseJumpPower = false
 	humanoid.JumpHeight = Rules.JUMP_HEIGHT
 	humanoid.WalkSpeed = 0
@@ -200,6 +204,18 @@ function RobotFactory.install()
 		end
 	end
 	humanoid.Parent = model
+	-- Só rotação. O Humanoid continua dono da altura, do pulo e do chão.
+	local face = Instance.new("Attachment")
+	face.Name = "FaceTrack"
+	face.Parent = hrp
+	local align = Instance.new("AlignOrientation")
+	align.Name = "FaceTrackAlign"
+	align.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	align.Attachment0 = face
+	align.RigidityEnabled = true
+	align.CFrame = CFrame.Angles(0, Rules.TRACK_YAW, 0)
+	align.Enabled = false
+	align.Parent = hrp
 	model.PrimaryPart = hrp
 	model.Parent = StarterPlayer
 

@@ -54,6 +54,17 @@ function Rules.currentSpeed(now: number, slowUntil: number, turboUntil: number):
 	return Rules.speed(slowUntil - now, turboUntil - now)
 end
 
+-- Documentação do Humanoid R6: a altura do RootPart parado é
+-- LeftLeg.Size.Y + (0.5 * RootPart.Size.Y) + HipHeight.
+-- HipHeight aqui é um deslocamento, não a distância do pé ao centro.
+function Rules.r6RootClearance(legLength: number, rootHeight: number, hipHeight: number): number
+	return legLength + (0.5 * rootHeight) + hipHeight
+end
+
+function Rules.r6HipHeightForFeet(legLength: number, rootHeight: number, rootAboveSoles: number): number
+	return rootAboveSoles - legLength - (0.5 * rootHeight)
+end
+
 function Rules.lookVectorFromYaw(yaw: number): (number, number, number)
 	return -math.sin(yaw), 0, -math.cos(yaw)
 end

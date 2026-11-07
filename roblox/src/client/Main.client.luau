@@ -275,10 +275,6 @@ local function drive(_dt)
 	if racing then
 		axisX = 1
 		hum.AutoRotate = false
-		local velocity = hrp.AssemblyLinearVelocity
-		-- Frente do modelo é -Z. lookAt para +X deixa o rosto na direção da chegada.
-		hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(1, 0, 0))
-		hrp.AssemblyLinearVelocity = velocity
 		local speed = player:GetAttribute("MoveSpeed")
 		if typeof(speed) == "number" then
 			hum.WalkSpeed = speed

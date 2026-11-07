@@ -23,7 +23,7 @@ O servidor cria um chão laranja e uma placa **antes** de montar o robô e a pis
 
 Se a linha do **boot** não existir, o script do servidor não rodou (o Output fica só com mensagens padrão do Studio). Se existir `[Nodex] FALHA NO BOOT`, o erro completo está nessa mensagem e numa placa vermelha no mundo. A faixa de cima do cliente repete o mesmo texto. Não fica mais uma espera infinita sem aviso.
 
-Na corrida o robô olha para a chegada (+X). A frente do modelo do Roblox é -Z; o rosto fica nesse lado. **Q** solta o foguetinho (freia quem está à frente, alcance curto, 2,5 s) e **E** larga óleo atrás (freia quem passar por cima no chão). Os dois compartilham **8 s** de recarga, com **2 s** de espera no começo. Sozinho o tiro aparece mesmo sem alvo. No computador as setas grandes de toque ficam escondidas.
+No R6 o `HipHeight` é um deslocamento: a altura do root parado é o comprimento da perna mais metade do root mais esse valor. Com perna 2, root 2 e `HipHeight` 3 o pé ficava 3 studs no ar. O valor derivado da sola é 0. A direção da corrida não mexe mais na altura do root a cada quadro. Na corrida o robô olha para a chegada (+X). A frente do modelo do Roblox é -Z; o rosto fica nesse lado. **Q** solta o foguetinho (freia quem está à frente, alcance curto, 2,5 s) e **E** larga óleo atrás (freia quem passar por cima no chão). Os dois compartilham **8 s** de recarga, com **2 s** de espera no começo. Sozinho o tiro aparece mesmo sem alvo. No computador as setas grandes de toque ficam escondidas.
 
 ## O que este protótipo já faz
 

@@ -286,6 +286,16 @@ near(faceZ, 0, "rosto em -Z local não vai para o lado")
 local backX = Rules.rotatedLocalZ(1, Rules.TRACK_YAW)
 near(backX, -1, "rosto em +Z local ficaria de costas")
 
+-- Rig R6: perna 2, root altura 2, sola 3 abaixo do centro. Fórmula oficial:
+-- altura do root = perna + metade do root + HipHeight.
+local legLength, rootHeight, rootAboveSoles = 2, 2, Course.HIP
+local wrongClearance = Rules.r6RootClearance(legLength, rootHeight, rootAboveSoles)
+check(wrongClearance == 6, "HipHeight 3 no R6 deixa o root a 6 studs")
+check(wrongClearance - rootAboveSoles == 3, "isso abre um vão de 3 studs sob o pé")
+local hip = Rules.r6HipHeightForFeet(legLength, rootHeight, rootAboveSoles)
+check(hip == 0, "HipHeight R6 derivado da geometria é 0")
+check(Rules.r6RootClearance(legLength, rootHeight, hip) == rootAboveSoles, "com HipHeight 0 o pé encosta no chão")
+
 check(Rules.POWER_CD == 8, "recarga do app é 8 s")
 check(Rules.POWER_ARM == 2, "espera inicial de 2 s")
 check(not Rules.canUsePower("lobby", true, false, false, 10, 0), "poder só na corrida")

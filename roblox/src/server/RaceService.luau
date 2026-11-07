@@ -476,10 +476,14 @@ local function returnToLobby()
 			local x, y, z, yaw = Course.lobbyPose(record.slot)
 			teleport(player, x, y, z, yaw, false)
 			bindSpawn(player, record)
-			local _, hum = humanoidOf(player)
+			local hrp, hum = humanoidOf(player)
 			if hum then
 				hum.AutoRotate = true
 				hum.WalkSpeed = Rules.LOBBY_SPEED
+			end
+			local align = hrp and hrp:FindFirstChild("FaceTrackAlign")
+			if align and align:IsA("AlignOrientation") then
+				align.Enabled = false
 			end
 			syncAttributes(player, record, Rules.LOBBY_SPEED)
 			syncStats(player, record)
@@ -636,6 +640,12 @@ local function startRace(now)
 				hum.JumpHeight = Rules.JUMP_HEIGHT
 				hum.AutoRotate = false
 			end
+			if hrp then
+				local align = hrp:FindFirstChild("FaceTrackAlign")
+				if align and align:IsA("AlignOrientation") then
+					align.Enabled = true
+				end
+			end
 			record.powerReadyAt = now + Rules.POWER_ARM
 			if hrp then
 				hrp.AssemblyLinearVelocity = Vector3.zero
@@ -760,6 +770,10 @@ local function stepRacer(player, record, now, step)
 
 	speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
 	hum.AutoRotate = false
+	local align = hrp:FindFirstChild("FaceTrackAlign")
+	if align and align:IsA("AlignOrientation") then
+		align.Enabled = true
+	end
 	hum.WalkSpeed = speed
 	hum.JumpHeight = Rules.JUMP_HEIGHT
 	hum.UseJumpPower = false
@@ -782,6 +796,10 @@ local function containLobby(player, record)
 	end
 	if state.phase == "lobby" then
 		hum.AutoRotate = true
+		local align = hrp:FindFirstChild("FaceTrackAlign")
+		if align and align:IsA("AlignOrientation") then
+			align.Enabled = false
+		end
 		hum.WalkSpeed = Rules.LOBBY_SPEED
 		syncAttributes(player, record, Rules.LOBBY_SPEED)
 	end
