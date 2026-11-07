@@ -4,6 +4,8 @@ local Workspace = game:GetService("Workspace")
 
 local Boot = require(script.Parent.Boot)
 
+local rescueBound = false
+
 Players.CharacterAutoLoads = true
 
 local function part(props)
@@ -86,9 +88,24 @@ local function ensureSafety()
 	spawn.Transparency = 1
 	spawn.Parent = Workspace
 	Workspace.Gravity = 196.2
-	-- Só depois do chão. O arquivo não pode nascer com um abismo em -80 e o Workspace vazio.
-	Workspace.FallenPartsDestroyHeight = -200
+	-- FallenPartsDestroyHeight não é gravável por Script (capability PluginOrOpenCloud).
+	-- Quem cair volta para este chão no Heartbeat abaixo.
 	writeSign("Nodex: Robô Corredor", "Servidor iniciou. Montando a Fábrica…", Color3.fromRGB(2, 48, 71))
+	if not rescueBound then
+		rescueBound = true
+		game:GetService("RunService").Heartbeat:Connect(function()
+			for _, player in ipairs(Players:GetPlayers()) do
+				local character = player.Character
+				local root = character and character:FindFirstChild("HumanoidRootPart")
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if root and humanoid and humanoid.Health > 0 and root.Position.Y < -30 then
+					root.AssemblyLinearVelocity = Vector3.zero
+					root.AssemblyAngularVelocity = Vector3.zero
+					root.CFrame = CFrame.new(0, 8, 0)
+				end
+			end
+		end)
+	end
 end
 
 local reported = false

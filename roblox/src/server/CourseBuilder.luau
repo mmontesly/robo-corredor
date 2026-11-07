@@ -461,15 +461,12 @@ function CourseBuilder.build()
 	world.Name = "NodexWorld"
 	world.Parent = workspace
 
-	workspace.StreamingEnabled = false
 	workspace.Gravity = 196.2
 
 	local track = Instance.new("Folder")
 	track.Name = "Track"
 	track.Parent = world
 	floorRun(track, Course.TRACK_MIN_X, Course.TRACK_END, Course.LANE_HALF * 2, 0)
-	-- Chão visível antes de Lighting/Atmosphere. Se o resto falhar, a esteira já existe.
-	workspace.FallenPartsDestroyHeight = -200
 
 	local lobby = Instance.new("Folder")
 	lobby.Name = "Lobby"

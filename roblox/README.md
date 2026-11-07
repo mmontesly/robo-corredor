@@ -10,7 +10,7 @@ No modo de edição o Workspace parece vazio. A pista **não está desenhada no 
 
 Isso foi o que aconteceu na primeira abertura. O arquivo antigo gravava `FallenPartsDestroyHeight = -80` com o Workspace **sem nenhum chão**. O cliente também não desenhava a interface enquanto esperava um remote que só existe depois da fábrica pronta. Qualquer erro antes disso apagava o personagem e deixava a câmera no céu, sem cartão.
 
-Agora o servidor cria um chão laranja e uma placa **antes** de montar o robô e a pista. O cliente mostra uma faixa no topo assim que o script dele começa, e aponta a câmera para esse chão mesmo sem avatar.
+O servidor cria um chão laranja e uma placa **antes** de montar o robô e a pista. O cliente mostra uma faixa no topo assim que o script dele começa, e aponta a câmera para esse chão mesmo sem avatar. `Workspace.FallenPartsDestroyHeight` e `Workspace.StreamingEnabled` não são gravados por script: o primeiro só pode ser definido por plugin (o Play mostrou `PluginOrOpenCloud`) e o segundo a documentação marca como não scriptável. Quem cai abaixo de Y = -30 é teletransportado de volta ao chão. Streaming continua `false` só no arquivo do lugar.
 
 1. Abra o `.rbxlx` novo e aperte **Play**.
 2. Aba **View → Output**.

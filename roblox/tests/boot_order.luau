@@ -83,7 +83,35 @@ end
 check(stopped, "erro da fábrica é reportado")
 check(factoryFail[2] == "safety", "chão continua antes da fábrica")
 
+local fs = require("@lune/fs")
+
+local function walk(dir, out)
+	for _, name in ipairs(fs.readDir(dir)) do
+		local path = dir .. "/" .. name
+		if fs.isDir(path) then
+			walk(path, out)
+		elseif string.sub(name, -5) == ".luau" then
+			table.insert(out, path)
+		end
+	end
+end
+
+local sources = {}
+walk("src", sources)
+local forbidden = {
+	"FallenPartsDestroyHeight%s*=",
+	"StreamingEnabled%s*=",
+	"FallHeightEnabled%s*=",
+}
+for _, path in ipairs(sources) do
+	local text = fs.readFile(path)
+	for _, pattern in ipairs(forbidden) do
+		check(string.find(text, pattern) == nil, path .. " não pode atribuir " .. pattern)
+	end
+end
+check(#sources >= 8, "varreu os scripts de runtime")
+
 if fails > 0 then
 	error(tostring(fails) .. " falha(s) no boot")
 end
-print("OK boot: chão primeiro, erro visível, sem espera infinita")
+print("OK boot: chão primeiro, erro visível, sem escrita restrita de Workspace")
