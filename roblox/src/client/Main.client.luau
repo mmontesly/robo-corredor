@@ -26,11 +26,11 @@ if playerGui then
 	bootLabel.Name = "Status"
 	bootLabel.AnchorPoint = Vector2.new(0.5, 0)
 	bootLabel.Position = UDim2.new(0.5, 0, 0, 8)
-	bootLabel.Size = UDim2.new(0.92, 0, 0, 72)
+	bootLabel.Size = UDim2.new(0.72, 0, 0, 28)
 	bootLabel.BackgroundColor3 = Color3.fromRGB(255, 248, 230)
 	bootLabel.TextColor3 = Color3.fromRGB(2, 48, 71)
 	bootLabel.Font = Enum.Font.SourceSansBold
-	bootLabel.TextSize = 20
+	bootLabel.TextSize = 14
 	bootLabel.TextWrapped = true
 	bootLabel.Text = "Nodex: cliente iniciou. Esperando a Fábrica…"
 	bootLabel.Parent = bootGui
@@ -118,6 +118,10 @@ local function setKey(code, down)
 		keys.d = down
 	elseif code == Enum.KeyCode.Space then
 		keys.space = down
+	elseif down and code == Enum.KeyCode.Q then
+		fire({ t = "power", v = "rocket" })
+	elseif down and code == Enum.KeyCode.E then
+		fire({ t = "power", v = "oil" })
 	end
 end
 
@@ -270,11 +274,17 @@ local function drive(_dt)
 	local racing = phase == "race" and player:GetAttribute("InRace") == true and player:GetAttribute("Finished") ~= true
 	if racing then
 		axisX = 1
+		hum.AutoRotate = false
+		local velocity = hrp.AssemblyLinearVelocity
+		-- Frente do modelo é -Z. lookAt para +X deixa o rosto na direção da chegada.
+		hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(1, 0, 0))
+		hrp.AssemblyLinearVelocity = velocity
 		local speed = player:GetAttribute("MoveSpeed")
 		if typeof(speed) == "number" then
 			hum.WalkSpeed = speed
 		end
 	elseif phase == "lobby" then
+		hum.AutoRotate = true
 		hum.WalkSpeed = Rules.LOBBY_SPEED
 	end
 	if jump and (racing or phase == "lobby") then

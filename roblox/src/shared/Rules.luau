@@ -23,6 +23,21 @@ Rules.MAX_PLAYERS = 8
 Rules.ALLOWANCE_SLACK = 6
 Rules.ALLOWANCE_AHEAD = 12
 Rules.REWIND_PAD = 4
+-- O app: recarga 8 s, espera inicial 2 s, foguetinho 900 px/s e alcance 900 px.
+-- 285 px/s lá equivalem a 22 studs/s aqui.
+Rules.POWER_CD = 8
+Rules.POWER_ARM = 2
+Rules.ROCKET_LIFE = 2.5
+Rules.ROCKET_RANGE = 22 * 900 / 285
+Rules.ROCKET_SPEED = 22 * 900 / 285
+Rules.OIL_LIFE = 8
+Rules.OIL_BEHIND = 4
+Rules.OIL_HALF = 3
+Rules.OIL_JUMP = 2.15
+Rules.MAX_POWERS = 8
+-- Frente do Humanoid é -Z. A pista corre para +X.
+-- CFrame.Angles(0, yaw, 0).LookVector = (-sin(yaw), 0, -cos(yaw)).
+Rules.TRACK_YAW = -math.pi / 2
 
 function Rules.speed(slowLeft: number, turboLeft: number): number
 	local mult = 1
@@ -37,6 +52,65 @@ end
 
 function Rules.currentSpeed(now: number, slowUntil: number, turboUntil: number): number
 	return Rules.speed(slowUntil - now, turboUntil - now)
+end
+
+function Rules.lookVectorFromYaw(yaw: number): (number, number, number)
+	return -math.sin(yaw), 0, -math.cos(yaw)
+end
+
+-- Ponto local (0, 0, localZ) depois da rotação Y do Roblox.
+function Rules.rotatedLocalZ(localZ: number, yaw: number): (number, number)
+	local x = localZ * math.sin(yaw)
+	local z = localZ * math.cos(yaw)
+	return x, z
+end
+
+function Rules.canUsePower(phase: string, inRound: boolean, finished: boolean, gone: boolean, now: number, readyAt: number): boolean
+	if phase ~= "race" or not inRound or finished or gone then
+		return false
+	end
+	return now >= readyAt
+end
+
+function Rules.nearestAhead(rows: { { id: number, x: number, racing: boolean } }, fromId: number, range: number): number?
+	local fromX = nil
+	for _, row in ipairs(rows) do
+		if row.id == fromId then
+			fromX = row.x
+		end
+	end
+	if fromX == nil then
+		return nil
+	end
+	local best = nil
+	local bestDx = range
+	for _, row in ipairs(rows) do
+		if row.id ~= fromId and row.racing then
+			local dx = row.x - fromX
+			if dx > 0 and dx < bestDx then
+				best = row.id
+				bestDx = dx
+			end
+		end
+	end
+	return best
+end
+
+function Rules.rocketReached(rocketX: number, targetX: number, ownerId: number, targetId: number, targetRacing: boolean): boolean
+	if ownerId == targetId or not targetRacing then
+		return false
+	end
+	return rocketX >= targetX
+end
+
+function Rules.oilHits(puddleX: number, half: number, playerX: number, feetAbove: number, jumpClear: number, ownerId: number, playerId: number, already: boolean): boolean
+	if playerId == ownerId or already then
+		return false
+	end
+	if math.abs(playerX - puddleX) > half then
+		return false
+	end
+	return feetAbove <= jumpClear
 end
 
 function Rules.jumpVelocity(gravity: number?): number

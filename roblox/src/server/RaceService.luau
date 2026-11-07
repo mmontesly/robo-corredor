@@ -21,6 +21,7 @@ local diedConn = {}
 local charConn = {}
 local pads = nil
 local boxes = nil
+local clearPowers
 
 local state = {
 	phase = "lobby",
@@ -33,6 +34,8 @@ local state = {
 	podiumUntil = 0,
 	notice = "",
 	noticeUntil = 0,
+	rockets = {},
+	oils = {},
 	wins = {},
 	dirty = true,
 	acc = 0,
@@ -111,16 +114,17 @@ local function paint(player, record)
 	end
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "NickTag"
-	billboard.Size = UDim2.fromOffset(160, 36)
-	billboard.StudsOffset = Vector3.new(0, 2.6, 0)
-	billboard.AlwaysOnTop = true
-	billboard.MaxDistance = 500
+	billboard.Size = UDim2.fromOffset(88, 16)
+	billboard.StudsOffset = Vector3.new(0, 1.7, 0)
+	billboard.AlwaysOnTop = false
+	billboard.MaxDistance = 180
 	billboard.Parent = head
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
 	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
+	label.TextSize = 13
+	label.TextScaled = false
 	label.Text = record.nick
 	label.TextColor3 = body
 	label.TextStrokeTransparency = 0.35
@@ -253,6 +257,7 @@ local function freshRoundFields(record)
 	record.place = nil
 	record.parked = false
 	record.lastReset = 0
+	record.powerReadyAt = 0
 	record.x = Course.SPAWN_X
 end
 
@@ -381,6 +386,7 @@ local function snapshotFor(player, now)
 			collected = you.collected,
 			slowLeft = math.max(0, (you.slowUntil or 0) - now),
 			turboLeft = math.max(0, (you.turboUntil or 0) - now),
+			powerLeft = math.max(0, (you.powerReadyAt or 0) - now),
 			isHost = player.UserId == state.hostUserId,
 			x = you.x or 0,
 		}
@@ -453,6 +459,7 @@ local function returnToLobby()
 		return
 	end
 	state.phase = "lobby"
+	clearPowers()
 	state.firstFinishAt = nil
 	state.countdownEnd = 0
 	state.raceStartServer = 0
@@ -471,6 +478,7 @@ local function returnToLobby()
 			bindSpawn(player, record)
 			local _, hum = humanoidOf(player)
 			if hum then
+				hum.AutoRotate = true
 				hum.WalkSpeed = Rules.LOBBY_SPEED
 			end
 			syncAttributes(player, record, Rules.LOBBY_SPEED)
@@ -584,6 +592,7 @@ local function beginCountdown()
 	state.countdownEnd = Workspace:GetServerTimeNow() + Rules.COUNTDOWN_SECONDS
 	state.notice = ""
 	state.noticeUntil = 0
+	clearPowers()
 	for _, player in ipairs(roster) do
 		local record = records[player.UserId]
 		if record then
@@ -625,7 +634,9 @@ local function startRace(now)
 				hum.WalkSpeed = Rules.BASE_SPEED
 				hum.UseJumpPower = false
 				hum.JumpHeight = Rules.JUMP_HEIGHT
+				hum.AutoRotate = false
 			end
+			record.powerReadyAt = now + Rules.POWER_ARM
 			if hrp then
 				hrp.AssemblyLinearVelocity = Vector3.zero
 				hrp.Anchored = false
@@ -748,6 +759,7 @@ local function stepRacer(player, record, now, step)
 	end
 
 	speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
+	hum.AutoRotate = false
 	hum.WalkSpeed = speed
 	hum.JumpHeight = Rules.JUMP_HEIGHT
 	hum.UseJumpPower = false
@@ -769,8 +781,168 @@ local function containLobby(player, record)
 		teleport(player, x, y, z, yaw, false)
 	end
 	if state.phase == "lobby" then
+		hum.AutoRotate = true
 		hum.WalkSpeed = Rules.LOBBY_SPEED
 		syncAttributes(player, record, Rules.LOBBY_SPEED)
+	end
+end
+
+local powerSerial = 0
+
+local function powersFolder()
+	local folder = Workspace:FindFirstChild("NodexPowers")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "NodexPowers"
+		folder.Parent = Workspace
+	end
+	return folder
+end
+
+clearPowers = function()
+	for _, rocket in ipairs(state.rockets) do
+		if rocket.part then
+			rocket.part:Destroy()
+		end
+	end
+	for _, puddle in ipairs(state.oils) do
+		if puddle.part then
+			puddle.part:Destroy()
+		end
+	end
+	table.clear(state.rockets)
+	table.clear(state.oils)
+	local folder = Workspace:FindFirstChild("NodexPowers")
+	if folder then
+		folder:Destroy()
+	end
+end
+
+local function dropOldest(list)
+	local old = table.remove(list, 1)
+	if old and old.part then
+		old.part:Destroy()
+	end
+end
+
+local function racingRows()
+	local rows = {}
+	for userId, record in pairs(records) do
+		table.insert(rows, {
+			id = userId,
+			x = record.x or 0,
+			racing = record.inRound == true and record.finished ~= true and record.gone ~= true and record.dnf ~= true,
+		})
+	end
+	return rows
+end
+
+local function spawnRocket(record)
+	while #state.rockets >= Rules.MAX_POWERS do
+		dropOldest(state.rockets)
+	end
+	powerSerial += 1
+	local origin = (record.x or 0) + 2.3
+	local targetId = Rules.nearestAhead(racingRows(), record.userId, Rules.ROCKET_RANGE)
+	local body = Instance.new("Part")
+	body.Name = "Foguetinho"
+	body.Size = Vector3.new(1.6, 0.45, 0.45)
+	body.Color = Color3.fromRGB(251, 86, 7)
+	body.Material = Enum.Material.SmoothPlastic
+	body.Anchored = true
+	body.CanCollide = false
+	body.CanTouch = false
+	body.CFrame = CFrame.new(origin, Course.FLOOR_TOP + 3.2, 0)
+	body.Parent = powersFolder()
+	table.insert(state.rockets, {
+		id = powerSerial,
+		ownerId = record.userId,
+		targetId = targetId,
+		x = origin,
+		life = Rules.ROCKET_LIFE,
+		part = body,
+	})
+end
+
+local function spawnOil(record)
+	while #state.oils >= Rules.MAX_POWERS do
+		dropOldest(state.oils)
+	end
+	powerSerial += 1
+	local origin = (record.x or 0) - Rules.OIL_BEHIND
+	local puddle = Instance.new("Part")
+	puddle.Name = "OleoSolto"
+	puddle.Size = Vector3.new(Rules.OIL_HALF * 2, 0.22, Course.LANE_HALF * 2 - 1)
+	puddle.Color = Color3.fromRGB(61, 52, 139)
+	puddle.Material = Enum.Material.SmoothPlastic
+	puddle.Anchored = true
+	puddle.CanCollide = false
+	puddle.CanTouch = false
+	puddle.CFrame = CFrame.new(origin, Course.FLOOR_TOP + 0.2, 0)
+	puddle.Parent = powersFolder()
+	table.insert(state.oils, {
+		id = powerSerial,
+		ownerId = record.userId,
+		x = origin,
+		life = Rules.OIL_LIFE,
+		hit = {},
+		part = puddle,
+	})
+end
+
+local function stepPowers(now, step)
+	local index = 1
+	while index <= #state.rockets do
+		local rocket = state.rockets[index]
+		rocket.x += Rules.ROCKET_SPEED * step
+		rocket.life -= step
+		local target = rocket.targetId and records[rocket.targetId]
+		local remove = rocket.life <= 0 or rocket.x > Course.FINISH_X + 40
+		if target then
+			local racing = target.inRound == true and target.finished ~= true and target.gone ~= true
+			if Rules.rocketReached(rocket.x, target.x or 0, rocket.ownerId, target.userId, racing) then
+				applySlow(target, now)
+				remove = true
+			end
+		end
+		if rocket.part then
+			rocket.part.CFrame = CFrame.new(rocket.x, Course.FLOOR_TOP + 3.2, 0)
+		end
+		if remove then
+			if rocket.part then
+				rocket.part:Destroy()
+			end
+			table.remove(state.rockets, index)
+		else
+			index += 1
+		end
+	end
+	index = 1
+	while index <= #state.oils do
+		local puddle = state.oils[index]
+		puddle.life -= step
+		for userId, record in pairs(records) do
+			if record.inRound and not record.finished and not record.gone then
+				local player = Players:GetPlayerByUserId(userId)
+				local hrp, hum = player and humanoidOf(player)
+				local feetAbove = 0
+				if hrp and hum then
+					feetAbove = feetOf(hrp, hum) - Course.FLOOR_TOP
+				end
+				if Rules.oilHits(puddle.x, Rules.OIL_HALF, record.x or 0, feetAbove, Rules.OIL_JUMP, puddle.ownerId, userId, puddle.hit[userId] == true) then
+					puddle.hit[userId] = true
+					applySlow(record, now)
+				end
+			end
+		end
+		if puddle.life <= 0 then
+			if puddle.part then
+				puddle.part:Destroy()
+			end
+			table.remove(state.oils, index)
+		else
+			index += 1
+		end
 	end
 end
 
@@ -790,6 +962,7 @@ local function onHeartbeat(dt)
 				containLobby(player, record)
 			end
 		end
+		stepPowers(now, step)
 		considerRoundEnd(now)
 	elseif state.phase == "podium" then
 		if now >= state.podiumUntil then
@@ -885,6 +1058,23 @@ local function onAction(player, payload)
 		returnToLobby()
 		return
 	end
+	if kind == "power" then
+		if payload.v ~= "rocket" and payload.v ~= "oil" then
+			return
+		end
+		if not Rules.canUsePower(state.phase, record.inRound == true, record.finished == true, record.gone == true, now, record.powerReadyAt or 0) then
+			return
+		end
+		record.powerReadyAt = now + Rules.POWER_CD
+		if payload.v == "rocket" then
+			spawnRocket(record)
+		else
+			spawnOil(record)
+		end
+		state.dirty = true
+		broadcast(now)
+		return
+	end
 	if kind == "checkpoint_reset" and state.phase == "race" then
 		if not record.inRound or record.finished or record.gone or record.spectating then
 			return
@@ -974,6 +1164,7 @@ local function onPlayer(player)
 		allowedX = 0,
 		x = 0,
 		lastReset = 0,
+		powerReadyAt = 0,
 		parked = false,
 	}
 	records[player.UserId] = record

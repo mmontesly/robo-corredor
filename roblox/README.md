@@ -23,6 +23,8 @@ O servidor cria um chão laranja e uma placa **antes** de montar o robô e a pis
 
 Se a linha do **boot** não existir, o script do servidor não rodou (o Output fica só com mensagens padrão do Studio). Se existir `[Nodex] FALHA NO BOOT`, o erro completo está nessa mensagem e numa placa vermelha no mundo. A faixa de cima do cliente repete o mesmo texto. Não fica mais uma espera infinita sem aviso.
 
+Na corrida o robô olha para a chegada (+X). A frente do modelo do Roblox é -Z; o rosto fica nesse lado. **Q** solta o foguetinho (freia quem está à frente, alcance curto, 2,5 s) e **E** larga óleo atrás (freia quem passar por cima no chão). Os dois compartilham **8 s** de recarga, com **2 s** de espera no começo. Sozinho o tiro aparece mesmo sem alvo. No computador as setas grandes de toque ficam escondidas.
+
 ## O que este protótipo já faz
 
 - Sala de **1 a 8** robôs. **Treino solo** funciona (não precisa de outra pessoa para ver a corrida).

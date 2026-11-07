@@ -147,11 +147,12 @@ function RobotFactory.install()
 		})
 	end
 
-	local eyeL = face("EyeL", Vector3.new(0.32, 0.36, 0.16), CFrame.new(-0.38, 4.9, 0.98), white, "eye")
-	local eyeR = face("EyeR", Vector3.new(0.32, 0.36, 0.16), CFrame.new(0.38, 4.9, 0.98), white, "eye")
-	local pupilL = face("PupilL", Vector3.new(0.16, 0.18, 0.1), CFrame.new(-0.38, 4.86, 1.08), ink, "pupil")
-	local pupilR = face("PupilR", Vector3.new(0.16, 0.18, 0.1), CFrame.new(0.38, 4.86, 1.08), ink, "pupil")
-	local smile = face("Smile", Vector3.new(0.78, 0.14, 0.1), CFrame.new(0, 4.42, 1.04), ink, "smile")
+	-- Frente do robô é -Z, igual ao Humanoid. A pista olha para +X.
+	local eyeL = face("EyeL", Vector3.new(0.32, 0.36, 0.16), CFrame.new(-0.38, 4.9, -0.98), white, "eye")
+	local eyeR = face("EyeR", Vector3.new(0.32, 0.36, 0.16), CFrame.new(0.38, 4.9, -0.98), white, "eye")
+	local pupilL = face("PupilL", Vector3.new(0.16, 0.18, 0.1), CFrame.new(-0.38, 4.86, -1.08), ink, "pupil")
+	local pupilR = face("PupilR", Vector3.new(0.16, 0.18, 0.1), CFrame.new(0.38, 4.86, -1.08), ink, "pupil")
+	local smile = face("Smile", Vector3.new(0.78, 0.14, 0.1), CFrame.new(0, 4.42, -1.04), ink, "smile")
 	local pole = face("Antenna", Vector3.new(0.16, 0.7, 0.16), CFrame.new(0, 5.85, 0), dark, "antenna")
 	local ball = face("AntennaBall", Vector3.new(0.5, 0.5, 0.5), CFrame.new(0, 6.42, 0), yellow, "antennaBall")
 	ball.Shape = Enum.PartType.Ball

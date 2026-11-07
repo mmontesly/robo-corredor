@@ -273,6 +273,49 @@ for slot = 1, 8 do
 end
 check(names.Raio and names.Bolinha, "os oito primeiros apelidos cabem na largada")
 
+local lx, ly, lz = Rules.lookVectorFromYaw(Rules.TRACK_YAW)
+near(lx, 1, "yaw da pista olha para +X")
+near(ly, 0, "yaw sem componente Y")
+near(lz, 0, "yaw da pista não olha para Z")
+local dx, _, dz = Rules.lookVectorFromYaw(0)
+near(dx, 0, "yaw 0 é a frente padrão -Z em X")
+near(dz, -1, "yaw 0 é a frente padrão -Z")
+local faceX, faceZ = Rules.rotatedLocalZ(-1, Rules.TRACK_YAW)
+near(faceX, 1, "rosto em -Z local aponta para a chegada")
+near(faceZ, 0, "rosto em -Z local não vai para o lado")
+local backX = Rules.rotatedLocalZ(1, Rules.TRACK_YAW)
+near(backX, -1, "rosto em +Z local ficaria de costas")
+
+check(Rules.POWER_CD == 8, "recarga do app é 8 s")
+check(Rules.POWER_ARM == 2, "espera inicial de 2 s")
+check(not Rules.canUsePower("lobby", true, false, false, 10, 0), "poder só na corrida")
+check(not Rules.canUsePower("race", true, true, false, 10, 0), "quem chegou não atira")
+check(not Rules.canUsePower("race", true, false, false, 5, 9), "recarga bloqueia")
+check(Rules.canUsePower("race", true, false, false, 9, 9), "recarga zerada libera")
+local aheadId = Rules.nearestAhead({
+	{ id = 1, x = 10, racing = true },
+	{ id = 2, x = 40, racing = true },
+	{ id = 3, x = 80, racing = true },
+	{ id = 4, x = 200, racing = true },
+}, 1, Rules.ROCKET_RANGE)
+check(aheadId == 2, "foguetinho mira o mais próximo à frente")
+check(Rules.nearestAhead({ { id = 1, x = 10, racing = true } }, 1, Rules.ROCKET_RANGE) == nil, "solo não tem alvo")
+check(Rules.nearestAhead({
+	{ id = 1, x = 10, racing = true },
+	{ id = 2, x = 5, racing = true },
+}, 1, Rules.ROCKET_RANGE) == nil, "quem está atrás não é alvo")
+check(not Rules.rocketReached(20, 30, 1, 1, true), "foguetinho não acerta o dono")
+check(not Rules.rocketReached(40, 30, 1, 2, false), "alvo que já saiu da corrida não leva")
+check(Rules.rocketReached(30, 30, 1, 2, true), "foguetinho acerta ao alcançar")
+check(not Rules.rocketReached(29, 30, 1, 2, true), "ainda não chegou")
+check(not Rules.oilHits(10, 3, 10, 0, Rules.OIL_JUMP, 1, 1, false), "óleo não pega o dono")
+check(Rules.oilHits(10, 3, 11, 0, Rules.OIL_JUMP, 1, 2, false), "óleo pega quem vem por cima no chão")
+check(not Rules.oilHits(10, 3, 11, 4, Rules.OIL_JUMP, 1, 2, false), "pulo passa pelo óleo")
+check(not Rules.oilHits(10, 3, 11, 0, Rules.OIL_JUMP, 1, 2, true), "óleo não repete o acerto")
+check(Rules.ROCKET_LIFE == 2.5, "vida do foguetinho do jogador")
+check(Rules.MAX_POWERS == 8, "limite de projéteis")
+check(Rules.POWER_CD > Rules.POWER_ARM, "recarga maior que a espera inicial")
+
 if fails > 0 then
 	error(tostring(fails) .. " falha(s) em " .. tostring(checks) .. " checagens")
 end

@@ -101,41 +101,45 @@ function Hud.mount(playerGui, fire)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "NodexHud"
 	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = false
+	gui.IgnoreGuiInset = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	pcall(function()
-		gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+		gui.ScreenInsets = Enum.ScreenInsets.None
 	end)
 	gui.Parent = playerGui
+	local uiScale = Instance.new("UIScale")
+	uiScale.Parent = gui
 
 	local top = Instance.new("Frame")
 	top.Name = "Top"
-	top.Size = UDim2.new(1, -16, 0, 96)
-	top.Position = UDim2.fromOffset(8, 8)
+	top.Size = UDim2.new(1, -12, 0, 36)
+	top.Position = UDim2.fromOffset(6, 4)
 	top.BackgroundColor3 = Color3.new(1, 1, 1)
 	top.BackgroundTransparency = 0.12
 	top.Visible = false
 	top.Parent = gui
 	corner(top, 18)
 
-	local batteryText = label(top, { text = "🔋 0", size = 22, align = Enum.TextXAlignment.Left })
+	local batteryText = label(top, { text = "🔋 0", size = 14, align = Enum.TextXAlignment.Left })
 	batteryText.AutomaticSize = Enum.AutomaticSize.None
-	batteryText.Position = UDim2.fromOffset(14, 8)
-	batteryText.Size = UDim2.fromOffset(120, 28)
+	batteryText.Position = UDim2.fromOffset(8, 2)
+	batteryText.Size = UDim2.fromOffset(70, 18)
 
 	local placeText = label(top, { text = "1º lugar", size = 22, color = paint(Config.TITLE_ORANGE) })
+	placeText.TextSize = 14
 	placeText.AutomaticSize = Enum.AutomaticSize.None
-	placeText.Position = UDim2.new(0.5, -80, 0, 8)
-	placeText.Size = UDim2.fromOffset(160, 28)
+	placeText.Position = UDim2.new(0.5, -50, 0, 2)
+	placeText.Size = UDim2.fromOffset(100, 18)
 
 	local timeText = label(top, { text = "0:00.00", size = 20, align = Enum.TextXAlignment.Right })
+	timeText.TextSize = 14
 	timeText.AutomaticSize = Enum.AutomaticSize.None
-	timeText.Position = UDim2.new(1, -150, 0, 8)
-	timeText.Size = UDim2.fromOffset(136, 28)
+	timeText.Position = UDim2.new(1, -120, 0, 2)
+	timeText.Size = UDim2.fromOffset(70, 18)
 
 	local barBack = Instance.new("Frame")
-	barBack.Position = UDim2.fromOffset(14, 44)
-	barBack.Size = UDim2.new(1, -28, 0, 14)
+	barBack.Position = UDim2.fromOffset(8, 20)
+	barBack.Size = UDim2.new(1, -78, 0, 8)
 	barBack.BackgroundColor3 = Color3.fromRGB(230, 234, 238)
 	barBack.Parent = top
 	corner(barBack, 8)
@@ -146,22 +150,22 @@ function Hud.mount(playerGui, fire)
 	corner(barFill, 8)
 
 	local effectText = label(top, { text = "", size = 16, color = paint(Config.NAVY) })
+	effectText.TextSize = 12
 	effectText.AutomaticSize = Enum.AutomaticSize.None
-	effectText.Position = UDim2.fromOffset(14, 64)
-	effectText.Size = UDim2.new(1, -28, 0, 24)
+	effectText.Visible = false
 
 	local resetBtn = Instance.new("TextButton")
-	resetBtn.AnchorPoint = Vector2.new(0.5, 1)
-	resetBtn.Size = UDim2.fromOffset(180, 40)
-	resetBtn.Position = UDim2.new(0.5, 0, 1, -168)
+	resetBtn.AnchorPoint = Vector2.new(1, 0)
+	resetBtn.Size = UDim2.fromOffset(52, 16)
+	resetBtn.Position = UDim2.new(1, -4, 0, 18)
 	resetBtn.BackgroundColor3 = paint(Config.ORANGE)
-	resetBtn.Text = "Voltar ao posto"
-	resetBtn.TextSize = 14
+	resetBtn.Text = "Posto"
+	resetBtn.TextSize = 11
 	resetBtn.Font = Enum.Font.GothamBold
 	resetBtn.TextColor3 = Color3.new(1, 1, 1)
 	resetBtn.Visible = false
-	resetBtn.ZIndex = 20
-	resetBtn.Parent = gui
+	resetBtn.ZIndex = 5
+	resetBtn.Parent = top
 	corner(resetBtn, 12)
 	resetBtn.MouseButton1Click:Connect(function()
 		fire({ t = "checkpoint_reset" })
@@ -171,8 +175,9 @@ function Hud.mount(playerGui, fire)
 	notice.AutomaticSize = Enum.AutomaticSize.None
 	notice.BackgroundColor3 = Color3.new(1, 1, 1)
 	notice.BackgroundTransparency = 0.1
-	notice.Position = UDim2.new(0.5, -160, 0, 146)
-	notice.Size = UDim2.fromOffset(320, 36)
+	notice.TextSize = 14
+	notice.Position = UDim2.new(0.5, -120, 0, 44)
+	notice.Size = UDim2.fromOffset(240, 22)
 	notice.Visible = false
 	corner(notice, 12)
 
@@ -180,7 +185,7 @@ function Hud.mount(playerGui, fire)
 	countdown.BackgroundTransparency = 1
 	countdown.AnchorPoint = Vector2.new(0.5, 0.5)
 	countdown.Position = UDim2.fromScale(0.5, 0.38)
-	countdown.Size = UDim2.fromOffset(280, 140)
+	countdown.Size = UDim2.fromOffset(120, 56)
 	countdown.Font = Enum.Font.GothamBold
 	countdown.TextScaled = true
 	countdown.TextColor3 = paint(Config.TITLE_ORANGE)
@@ -194,8 +199,9 @@ function Hud.mount(playerGui, fire)
 	local hint = label(gui, { text = "", size = 16 })
 	hint.AutomaticSize = Enum.AutomaticSize.None
 	hint.AnchorPoint = Vector2.new(0.5, 0)
-	hint.Position = UDim2.new(0.5, 0, 0, 108)
-	hint.Size = UDim2.new(1, -24, 0, 32)
+	hint.Position = UDim2.new(0.5, 0, 0, 42)
+	hint.Size = UDim2.new(0.7, 0, 0, 18)
+	hint.TextSize = 12
 	hint.TextColor3 = paint(Config.NAVY)
 	hint.BackgroundColor3 = Color3.new(1, 1, 1)
 	hint.BackgroundTransparency = 0.2
@@ -203,9 +209,9 @@ function Hud.mount(playerGui, fire)
 
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "Card"
-	scroll.AnchorPoint = Vector2.new(0.5, 0)
-	scroll.Position = UDim2.new(0.5, 0, 0, 8)
-	scroll.Size = UDim2.new(0.94, 0, 1, -150)
+	scroll.AnchorPoint = Vector2.new(0.5, 0.5)
+	scroll.Position = UDim2.fromScale(0.5, 0.48)
+	scroll.Size = UDim2.fromScale(0.62, 0.72)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 8
@@ -231,10 +237,10 @@ function Hud.mount(playerGui, fire)
 	list.SortOrder = Enum.SortOrder.LayoutOrder
 	list.Parent = card
 
-	local title = label(card, { text = Config.TITLE, size = 28, color = paint(Config.TITLE_ORANGE), order = 1 })
+	local title = label(card, { text = Config.TITLE, size = 18, color = paint(Config.TITLE_ORANGE), order = 1 })
 	local world = label(card, { text = "🏭 " .. Config.WORLD, size = 20, order = 2 })
 	local tip = label(card, {
-		text = Config.TIP_TOUCH .. "\n" .. Config.TIP_JUMP .. "\n" .. Config.TIP_BATTERY .. "\nNo lobby: WASD ou setas, Espaço pula. ◀▶ andam, ▲▼ desviam.",
+		text = Config.TIP_JUMP .. "\n" .. Config.TIP_BATTERY .. "\nQ foguetinho, E óleo. Recarga 8 s. Teclado no computador; setas só no toque.",
 		size = 16,
 		font = Enum.Font.Gotham,
 		order = 3,
@@ -249,7 +255,7 @@ function Hud.mount(playerGui, fire)
 	chips.LayoutOrder = 6
 	chips.Parent = card
 	local grid = Instance.new("UIGridLayout")
-	grid.CellSize = UDim2.fromOffset(112, 36)
+	grid.CellSize = UDim2.fromOffset(84, 26)
 	grid.CellPadding = UDim2.fromOffset(6, 6)
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 	grid.Parent = chips
@@ -282,8 +288,14 @@ function Hud.mount(playerGui, fire)
 	rowLayout.Parent = rows
 
 	local readyBtn = button(card, "Pronto", paint(Config.TEAL), 8)
+	readyBtn.Size = UDim2.new(1, 0, 0, 32)
+	readyBtn.TextSize = 16
 	local startBtn = button(card, "Começar", paint(Config.ORANGE), 9)
+	startBtn.Size = UDim2.new(1, 0, 0, 32)
+	startBtn.TextSize = 16
 	local returnBtn = button(card, "Nova corrida", paint(Config.ORANGE), 10)
+	returnBtn.Size = UDim2.new(1, 0, 0, 32)
+	returnBtn.TextSize = 16
 	local waitText = label(card, { text = "", size = 16, font = Enum.Font.Gotham, order = 11 })
 
 	readyBtn.MouseButton1Click:Connect(function()
@@ -298,7 +310,7 @@ function Hud.mount(playerGui, fire)
 	end)
 
 	local function touchPad(text, xScale, yScale, key)
-		local b = holdButton(gui, text, UDim2.fromOffset(76, 64), UDim2.new(xScale, 0, yScale, 0), Vector2.new(0, 1))
+		local b = holdButton(gui, text, UDim2.fromOffset(54, 42), UDim2.new(xScale, 0, yScale, 0), Vector2.new(0, 1))
 		bindHold(b, holds, key)
 		return b
 	end
@@ -311,10 +323,43 @@ function Hud.mount(playerGui, fire)
 	backBtn.Position = UDim2.new(0, 96, 1, -88)
 	local forwardBtn = touchPad("▶", 0, 1, "forward")
 	forwardBtn.Position = UDim2.new(0, 96, 1, -16)
-	local jumpBtn = holdButton(gui, "Pular", UDim2.fromOffset(104, 104), UDim2.new(1, -16, 1, -16), Vector2.new(1, 1))
+	local jumpBtn = holdButton(gui, "Pular", UDim2.fromOffset(64, 64), UDim2.new(1, -8, 1, -8), Vector2.new(1, 1))
 	jumpBtn.BackgroundColor3 = paint(Config.ORANGE)
 	jumpBtn.TextSize = 24
 	bindHold(jumpBtn, holds, "jump")
+
+	local rocketBtn = Instance.new("TextButton")
+	rocketBtn.AnchorPoint = Vector2.new(1, 1)
+	rocketBtn.Size = UDim2.fromOffset(132, 26)
+	rocketBtn.Position = UDim2.new(0.5, -4, 1, -6)
+	rocketBtn.BackgroundColor3 = paint(Config.ORANGE)
+	rocketBtn.Font = Enum.Font.GothamBold
+	rocketBtn.TextSize = 13
+	rocketBtn.TextColor3 = Color3.new(1, 1, 1)
+	rocketBtn.Text = "Q Foguetinho"
+	rocketBtn.Visible = false
+	rocketBtn.ZIndex = 6
+	rocketBtn.Parent = gui
+	corner(rocketBtn, 8)
+	rocketBtn.MouseButton1Click:Connect(function()
+		fire({ t = "power", v = "rocket" })
+	end)
+	local oilBtn = Instance.new("TextButton")
+	oilBtn.AnchorPoint = Vector2.new(0, 1)
+	oilBtn.Size = UDim2.fromOffset(110, 26)
+	oilBtn.Position = UDim2.new(0.5, 4, 1, -6)
+	oilBtn.BackgroundColor3 = Color3.fromRGB(61, 52, 139)
+	oilBtn.Font = Enum.Font.GothamBold
+	oilBtn.TextSize = 13
+	oilBtn.TextColor3 = Color3.new(1, 1, 1)
+	oilBtn.Text = "E Óleo"
+	oilBtn.Visible = false
+	oilBtn.ZIndex = 6
+	oilBtn.Parent = gui
+	corner(oilBtn, 8)
+	oilBtn.MouseButton1Click:Connect(function()
+		fire({ t = "power", v = "oil" })
+	end)
 
 	local function clearRows()
 		for _, child in ipairs(rows:GetChildren()) do
@@ -339,18 +384,31 @@ function Hud.mount(playerGui, fire)
 		top.Visible = racing
 		scroll.Visible = phase == "lobby" or phase == "podium" or spectating
 		resetBtn.Visible = phase == "race" and you ~= nil and you.inRound and not you.finished and not you.spectating
-		local showBelt = phase == "lobby"
-		local showMove = phase == "lobby" or (phase == "race" and you and you.inRound and not you.finished and not you.spectating)
+		local touch = game:GetService("UserInputService").TouchEnabled
+		local camera = workspace.CurrentCamera
+		local viewH = camera and camera.ViewportSize.Y or 800
+		uiScale.Scale = viewH < 480 and math.clamp(viewH / 520, 0.62, 0.9) or 1
+		local showMove = touch and (phase == "lobby" or (phase == "race" and you and you.inRound and not you.finished and not you.spectating))
+		local showBelt = touch and phase == "lobby"
 		backBtn.Visible = showBelt
 		forwardBtn.Visible = showBelt
 		upBtn.Visible = showMove
 		downBtn.Visible = showMove
-		jumpBtn.Visible = showMove == true
+		jumpBtn.Visible = showMove
+		local showPower = phase == "race" and you and you.inRound and not you.finished and not you.spectating
+		rocketBtn.Visible = showPower == true
+		oilBtn.Visible = showPower == true
+		local left = you and you.powerLeft or 0
+		if left > 0.05 then
+			local secs = string.format("%.0f", math.ceil(left))
+			rocketBtn.Text = "Q Foguetinho " .. secs .. "s"
+			oilBtn.Text = "E Óleo " .. secs .. "s"
+		else
+			rocketBtn.Text = "Q Foguetinho"
+			oilBtn.Text = "E Óleo"
+		end
 
-		if phase == "race" and not spectating then
-			hint.Text = "A corrida anda sozinha. Espaço ou Pular. W/S ou ▲▼ desviam."
-			hint.Visible = true
-		elseif phase == "countdown" and not spectating then
+		if phase == "countdown" and not spectating then
 			hint.Text = Config.TIP_JUMP
 			hint.Visible = true
 		else
