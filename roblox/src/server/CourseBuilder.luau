@@ -427,15 +427,23 @@ local function lighting()
 	if old then
 		old:Destroy()
 	end
-	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Name = "NodexAtmosphere"
-	atmosphere.Density = 0.18
-	atmosphere.Offset = 0.2
-	atmosphere.Color = color(Config.SKY)
-	atmosphere.Decay = color(Config.SKY)
-	atmosphere.Glare = 0
-	atmosphere.Haze = 1.2
-	atmosphere.Parent = Lighting
+	-- Atmosphere sem um Sky no Lighting não desenha nada e, em lugar
+	-- ainda em Compatibility, pode falhar ao ser pai de Lighting.
+	-- A Fábrica não depende disso: o céu vem do fundo amarelo e do fog.
+	local ok, err = pcall(function()
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Name = "NodexAtmosphere"
+		atmosphere.Density = 0.18
+		atmosphere.Offset = 0.2
+		atmosphere.Color = color(Config.SKY)
+		atmosphere.Decay = color(Config.SKY)
+		atmosphere.Glare = 0
+		atmosphere.Haze = 1.2
+		atmosphere.Parent = Lighting
+	end)
+	if not ok then
+		warn("[Nodex] Atmosphere ignorada: " .. tostring(err))
+	end
 end
 
 function CourseBuilder.build()
@@ -454,21 +462,21 @@ function CourseBuilder.build()
 	world.Parent = workspace
 
 	workspace.StreamingEnabled = false
-	workspace.FallenPartsDestroyHeight = -80
 	workspace.Gravity = 196.2
-
-	lighting()
-	backdrop(world)
 
 	local track = Instance.new("Folder")
 	track.Name = "Track"
 	track.Parent = world
 	floorRun(track, Course.TRACK_MIN_X, Course.TRACK_END, Course.LANE_HALF * 2, 0)
+	-- Chão visível antes de Lighting/Atmosphere. Se o resto falhar, a esteira já existe.
+	workspace.FallenPartsDestroyHeight = -200
 
 	local lobby = Instance.new("Folder")
 	lobby.Name = "Lobby"
 	lobby.Parent = world
 	floorRun(lobby, Course.LOBBY_MIN_X, Course.LOBBY_MAX_X, Course.LOBBY_HALF_Z * 2, 0)
+	backdrop(world)
+	lighting()
 	lobbySign(lobby)
 	podium(lobby)
 

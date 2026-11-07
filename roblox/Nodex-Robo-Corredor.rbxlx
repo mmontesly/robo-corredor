@@ -22,6 +22,7 @@
         <G>0.66</G>
         <B>0.45</B>
       </Color3>
+      <token name="Technology">1</token>
     </Properties>
   </Item>
   <Item class="Players" referent="1">
@@ -670,14 +671,49 @@ return Rules
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="8">
+    <Item class="ModuleScript" referent="8">
       <Properties>
-        <string name="Name">NodexServer</string>
+        <string name="Name">Boot</string>
+        <string name="Source"><![CDATA[-- Ordem do boot, sem depender do Roblox, para poder executar fora do Studio.
+-- O chão de segurança tem de existir antes de qualquer require que possa falhar.
+-- Se a fábrica ou o robô quebrarem, o erro é reportado e a corrida não segue calada.
+
+local Boot = {}
+
+function Boot.run(api)
+	api.log("[Nodex] boot: script do servidor iniciou")
+	local safetyOk, safetyErr = pcall(api.ensureSafety)
+	if not safetyOk then
+		local text = "chão de segurança: " .. tostring(safetyErr)
+		api.fail(text)
+		return false, text
+	end
+	api.log("[Nodex] boot: chão de segurança pronto")
+
+	local pads
+	local ok, err = xpcall(function()
+		api.installCharacter()
+		pads = api.buildFactory()
+		api.startRace(pads)
+	end, debug.traceback)
+
+	if not ok then
+		api.fail(err)
+		return false, err
+	end
+
+	api.log("[Nodex] boot: Fábrica pronta")
+	return true, pads
+end
+
+return Boot
+]]></string>
       </Properties>
-      <Item class="ModuleScript" referent="9">
-        <Properties>
-          <string name="Name">CourseBuilder</string>
-          <string name="Source"><![CDATA[-- Constrói a Fábrica com Parts. Nada de Toolbox, decal, mesh ou som.
+    </Item>
+    <Item class="ModuleScript" referent="9">
+      <Properties>
+        <string name="Name">CourseBuilder</string>
+        <string name="Source"><![CDATA[-- Constrói a Fábrica com Parts. Nada de Toolbox, decal, mesh ou som.
 
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
@@ -1106,15 +1142,23 @@ local function lighting()
 	if old then
 		old:Destroy()
 	end
-	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Name = "NodexAtmosphere"
-	atmosphere.Density = 0.18
-	atmosphere.Offset = 0.2
-	atmosphere.Color = color(Config.SKY)
-	atmosphere.Decay = color(Config.SKY)
-	atmosphere.Glare = 0
-	atmosphere.Haze = 1.2
-	atmosphere.Parent = Lighting
+	-- Atmosphere sem um Sky no Lighting não desenha nada e, em lugar
+	-- ainda em Compatibility, pode falhar ao ser pai de Lighting.
+	-- A Fábrica não depende disso: o céu vem do fundo amarelo e do fog.
+	local ok, err = pcall(function()
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Name = "NodexAtmosphere"
+		atmosphere.Density = 0.18
+		atmosphere.Offset = 0.2
+		atmosphere.Color = color(Config.SKY)
+		atmosphere.Decay = color(Config.SKY)
+		atmosphere.Glare = 0
+		atmosphere.Haze = 1.2
+		atmosphere.Parent = Lighting
+	end)
+	if not ok then
+		warn("[Nodex] Atmosphere ignorada: " .. tostring(err))
+	end
 end
 
 function CourseBuilder.build()
@@ -1133,21 +1177,21 @@ function CourseBuilder.build()
 	world.Parent = workspace
 
 	workspace.StreamingEnabled = false
-	workspace.FallenPartsDestroyHeight = -80
 	workspace.Gravity = 196.2
-
-	lighting()
-	backdrop(world)
 
 	local track = Instance.new("Folder")
 	track.Name = "Track"
 	track.Parent = world
 	floorRun(track, Course.TRACK_MIN_X, Course.TRACK_END, Course.LANE_HALF * 2, 0)
+	-- Chão visível antes de Lighting/Atmosphere. Se o resto falhar, a esteira já existe.
+	workspace.FallenPartsDestroyHeight = -200
 
 	local lobby = Instance.new("Folder")
 	lobby.Name = "Lobby"
 	lobby.Parent = world
 	floorRun(lobby, Course.LOBBY_MIN_X, Course.LOBBY_MAX_X, Course.LOBBY_HALF_Z * 2, 0)
+	backdrop(world)
+	lighting()
 	lobbySign(lobby)
 	podium(lobby)
 
@@ -1234,26 +1278,177 @@ end
 
 return CourseBuilder
 ]]></string>
-        </Properties>
-      </Item>
-      <Item class="Script" referent="10">
-        <Properties>
-          <string name="Name">Main</string>
-          <token name="RunContext">0</token>
-          <string name="Source"><![CDATA[local CourseBuilder = require(script.Parent.CourseBuilder)
-local RobotFactory = require(script.Parent.RobotFactory)
-local RaceService = require(script.Parent.RaceService)
+      </Properties>
+    </Item>
+    <Item class="Script" referent="10">
+      <Properties>
+        <string name="Name">Main</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[local Players = game:GetService("Players")
+local StarterPlayer = game:GetService("StarterPlayer")
+local Workspace = game:GetService("Workspace")
 
-RobotFactory.install()
-local pads = CourseBuilder.build()
-RaceService.start(pads)
+local Boot = require(script.Parent.Boot)
+
+Players.CharacterAutoLoads = true
+
+local function part(props)
+	local item = Instance.new(props.className or "Part")
+	item.Name = props.name
+	item.Anchored = true
+	item.CanCollide = props.collide ~= false
+	item.Size = props.size
+	item.CFrame = props.cframe
+	item.Color = props.color
+	item.Parent = Workspace
+	return item
+end
+
+local function writeSign(titleText, bodyText, color)
+	local old = Workspace:FindFirstChild("NodexBootSign")
+	if old then
+		old:Destroy()
+	end
+	local board = part({
+		name = "NodexBootSign",
+		size = Vector3.new(28, 14, 1),
+		cframe = CFrame.new(0, 14, -18),
+		color = color,
+		collide = false,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Back
+	gui.PixelsPerStud = 28
+	gui.Parent = board
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.BackgroundColor3 = color
+	frame.Parent = gui
+	local title = Instance.new("TextLabel")
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, -16, 0.28, 0)
+	title.Position = UDim2.fromOffset(8, 8)
+	title.Font = Enum.Font.SourceSansBold
+	title.TextScaled = true
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Text = titleText
+	title.Parent = frame
+	local body = Instance.new("TextLabel")
+	body.BackgroundTransparency = 1
+	body.Size = UDim2.new(1, -16, 0.62, 0)
+	body.Position = UDim2.fromOffset(8, 70)
+	body.Font = Enum.Font.SourceSans
+	body.TextScaled = true
+	body.TextWrapped = true
+	body.TextXAlignment = Enum.TextXAlignment.Left
+	body.TextYAlignment = Enum.TextYAlignment.Top
+	body.TextColor3 = Color3.new(1, 1, 1)
+	body.Text = string.sub(bodyText, 1, 900)
+	body.Parent = frame
+end
+
+local function ensureSafety()
+	if Workspace:FindFirstChild("NodexSafety") then
+		return
+	end
+	local floor = part({
+		name = "NodexSafety",
+		size = Vector3.new(80, 2, 80),
+		cframe = CFrame.new(0, 3, 0),
+		color = Color3.fromRGB(251, 133, 0),
+	})
+	pcall(function()
+		floor.TopSurface = Enum.SurfaceType.Smooth
+		floor.BottomSurface = Enum.SurfaceType.Smooth
+	end)
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "NodexSafetySpawn"
+	spawn.Size = Vector3.new(8, 1, 8)
+	spawn.CFrame = CFrame.new(0, 4.5, 0)
+	spawn.Anchored = true
+	spawn.CanCollide = false
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.Transparency = 1
+	spawn.Parent = Workspace
+	Workspace.Gravity = 196.2
+	-- Só depois do chão. O arquivo não pode nascer com um abismo em -80 e o Workspace vazio.
+	Workspace.FallenPartsDestroyHeight = -200
+	writeSign("Nodex: Robô Corredor", "Servidor iniciou. Montando a Fábrica…", Color3.fromRGB(2, 48, 71))
+end
+
+local reported = false
+
+Boot.run({
+	log = print,
+	ensureSafety = ensureSafety,
+	installCharacter = function()
+		local ok, err = pcall(function()
+			require(script.Parent.RobotFactory).install()
+		end)
+		if not ok then
+			warn("[Nodex] robô customizado falhou; o avatar padrão do Roblox será usado. " .. tostring(err))
+			local starter = StarterPlayer:FindFirstChild("StarterCharacter")
+			if starter then
+				starter:Destroy()
+			end
+		end
+	end,
+	buildFactory = function()
+		local pads = require(script.Parent.CourseBuilder).build()
+		local safety = Workspace:FindFirstChild("NodexSafety")
+		if safety then
+			safety:Destroy()
+		end
+		local safetySpawn = Workspace:FindFirstChild("NodexSafetySpawn")
+		if safetySpawn then
+			safetySpawn:Destroy()
+		end
+		return pads
+	end,
+	startRace = function(pads)
+		require(script.Parent.RaceService).start(pads)
+		local sign = Workspace:FindFirstChild("NodexBootSign")
+		if sign then
+			sign:Destroy()
+		end
+	end,
+	fail = function(err)
+		reported = true
+		warn("[Nodex] FALHA NO BOOT:\n" .. tostring(err))
+		pcall(function()
+			writeSign("Nodex: erro ao montar", tostring(err), Color3.fromRGB(180, 30, 30))
+		end)
+	end,
+})
+
+task.delay(3, function()
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root then
+			continue
+		end
+		warn("[Nodex] " .. player.Name .. " sem personagem após 3 s. Removendo StarterCharacter e carregando o avatar padrão.")
+		local starter = StarterPlayer:FindFirstChild("StarterCharacter")
+		if starter then
+			starter:Destroy()
+		end
+		pcall(function()
+			player:LoadCharacter()
+		end)
+	end
+	if reported then
+		warn("[Nodex] O chão laranja NodexSafety ficou no Workspace. Leia a placa vermelha e o Output.")
+	end
+end)
 ]]></string>
-        </Properties>
-      </Item>
-      <Item class="ModuleScript" referent="11">
-        <Properties>
-          <string name="Name">RaceService</string>
-          <string name="Source"><![CDATA[-- Corrida no servidor. O cliente só pede apelido, pronto, início, posto e pulo.
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="11">
+      <Properties>
+        <string name="Name">RaceService</string>
+        <string name="Source"><![CDATA[-- Corrida no servidor. O cliente só pede apelido, pronto, início, posto e pulo.
 -- Posição, bateria, óleo, engrenagem, posto, chegada e pódio são decididos aqui.
 
 local Debris = game:GetService("Debris")
@@ -2342,12 +2537,12 @@ end
 
 return RaceService
 ]]></string>
-        </Properties>
-      </Item>
-      <Item class="ModuleScript" referent="12">
-        <Properties>
-          <string name="Name">RobotFactory</string>
-          <string name="Source"><![CDATA[-- Robô de blocos com Humanoid R6. Sem mesh, sem decal e sem animação da plataforma.
+      </Properties>
+    </Item>
+    <Item class="ModuleScript" referent="12">
+      <Properties>
+        <string name="Name">RobotFactory</string>
+        <string name="Source"><![CDATA[-- Robô de blocos com Humanoid R6. Sem mesh, sem decal e sem animação da plataforma.
 -- O rosto olha para a câmera lateral (+Z) enquanto o corpo corre para +X.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -2432,6 +2627,8 @@ function RobotFactory.install()
 	})
 	hrp.Transparency = 1
 	hrp.RootPriority = 1
+	hrp.CanQuery = true
+	hrp.CanTouch = true
 
 	local torso = part({
 		name = "Torso",
@@ -2546,13 +2743,6 @@ function RobotFactory.install()
 		end
 	end
 	humanoid.Parent = model
-
-	-- LocalScript vazio com o nome Animate: o motor não injeta o Animate padrão
-	-- (aquele puxaria animações por asset id). O balanço das pernas fica no cliente.
-	local animate = Instance.new("LocalScript")
-	animate.Name = "Animate"
-	animate.Parent = model
-
 	model.PrimaryPart = hrp
 	model.Parent = StarterPlayer
 
@@ -2563,8 +2753,7 @@ end
 
 return RobotFactory
 ]]></string>
-        </Properties>
-      </Item>
+      </Properties>
     </Item>
   </Item>
   <Item class="StarterPlayer" referent="13">
@@ -3118,16 +3307,88 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+print("[Nodex] cliente: script iniciou")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local playerGui = player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 10)
+local bootLabel = nil
+
+if playerGui then
+	local bootGui = Instance.new("ScreenGui")
+	bootGui.Name = "NodexBoot"
+	bootGui.ResetOnSpawn = false
+	bootGui.DisplayOrder = 50
+	bootGui.Parent = playerGui
+	bootLabel = Instance.new("TextLabel")
+	bootLabel.Name = "Status"
+	bootLabel.AnchorPoint = Vector2.new(0.5, 0)
+	bootLabel.Position = UDim2.new(0.5, 0, 0, 8)
+	bootLabel.Size = UDim2.new(0.92, 0, 0, 72)
+	bootLabel.BackgroundColor3 = Color3.fromRGB(255, 248, 230)
+	bootLabel.TextColor3 = Color3.fromRGB(2, 48, 71)
+	bootLabel.Font = Enum.Font.SourceSansBold
+	bootLabel.TextSize = 20
+	bootLabel.TextWrapped = true
+	bootLabel.Text = "Nodex: cliente iniciou. Esperando a Fábrica…"
+	bootLabel.Parent = bootGui
+else
+	warn("[Nodex] cliente: PlayerGui não apareceu em 10 s")
+	return
+end
+
+local function aimCamera()
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	cam.FieldOfView = 68
+	if root then
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.CFrame = CFrame.lookAt(Vector3.new(root.Position.X - 4, root.Position.Y + 6.2, 32), root.Position + Vector3.new(12, 1.2, 0))
+	elseif Workspace:FindFirstChild("NodexWorld") or Workspace:FindFirstChild("NodexSafety") or Workspace:FindFirstChild("NodexBootSign") then
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.CFrame = CFrame.lookAt(Vector3.new(18, 20, 52), Vector3.new(0, 6, -8))
+	end
+end
+
+RunService:BindToRenderStep("NodexBootCamera", Enum.RenderPriority.Camera.Value + 1, aimCamera)
+
+local function bootMessage(text, bad)
+	if bad then
+		warn("[Nodex] cliente: " .. text)
+	else
+		print("[Nodex] cliente: " .. text)
+	end
+	if bootLabel then
+		bootLabel.Text = text
+		bootLabel.TextColor3 = bad and Color3.fromRGB(120, 16, 16) or Color3.fromRGB(2, 48, 71)
+	end
+end
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 10)
+if not Shared then
+	bootMessage("ERRO: ReplicatedStorage.Shared não chegou em 10 s.", true)
+	return
+end
 local Config = require(Shared:WaitForChild("Config"))
 local Rules = require(Shared:WaitForChild("Rules"))
 local Hud = require(script.Parent:WaitForChild("Hud"))
 
-local player = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
-local remotes = ReplicatedStorage:WaitForChild("NodexRemotes", 30)
-local action = remotes:WaitForChild("Action")
-local stateRemote = remotes:WaitForChild("State")
+local remotes = ReplicatedStorage:WaitForChild("NodexRemotes", 15)
+if not remotes then
+	bootMessage("ERRO: o servidor não criou NodexRemotes em 15 s. No Output, a primeira linha do servidor tem de ser [Nodex] boot: script do servidor iniciou. Se essa linha não existe, o script do servidor não rodou. Se existir FALHA NO BOOT, o erro está nessa mensagem e na placa vermelha.", true)
+	return
+end
+local action = remotes:WaitForChild("Action", 5)
+local stateRemote = remotes:WaitForChild("State", 5)
+if not action or not stateRemote then
+	bootMessage("ERRO: NodexRemotes chegou sem Action ou State.", true)
+	return
+end
+bootMessage("Nodex: conectado ao servidor.", false)
 
 local keys = {
 	w = false,
@@ -3270,12 +3531,16 @@ local function drive(_dt)
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if camera then
-		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 68
 		if hrp then
+			camera.CameraType = Enum.CameraType.Scriptable
 			local look = hrp.Position + Vector3.new(12, 1.2, 0)
 			local camPos = Vector3.new(hrp.Position.X - 4, hrp.Position.Y + 6.2, 32)
 			camera.CFrame = CFrame.lookAt(camPos, look)
+		elseif Workspace:FindFirstChild("NodexWorld") or Workspace:FindFirstChild("NodexSafety") or Workspace:FindFirstChild("NodexBootSign") then
+			-- Sem avatar a câmera do Studio fica no céu. Aponta para o chão que o servidor já criou.
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera.CFrame = CFrame.lookAt(Vector3.new(18, 20, 52), Vector3.new(0, 6, -8))
 		end
 	end
 	if not hum or not hrp or hum.Health <= 0 or hrp.Anchored then
@@ -3328,6 +3593,9 @@ stateRemote.OnClientEvent:Connect(function(snapshot)
 	latest = snapshot
 	hud.render(snapshot)
 	applyCollected(snapshot.you and snapshot.you.collected or {})
+	if bootLabel and bootLabel.Parent then
+		bootLabel.Parent.Enabled = false
+	end
 end)
 
 CollectionService:GetInstanceAddedSignal(Config.TAG_PICKUP):Connect(function()
@@ -3345,7 +3613,6 @@ fire({ t = "hello" })
   <Item class="Workspace" referent="17">
     <Properties>
       <string name="Name">Workspace</string>
-      <float name="FallenPartsDestroyHeight">-80</float>
       <float name="Gravity">196.2</float>
       <bool name="NeedsPivotMigration">false</bool>
       <bool name="StreamingEnabled">false</bool>

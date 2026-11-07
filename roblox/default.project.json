@@ -8,9 +8,7 @@
       }
     },
     "ServerScriptService": {
-      "NodexServer": {
-        "$path": "src/server"
-      }
+      "$path": "src/server"
     },
     "StarterPlayer": {
       "StarterPlayerScripts": {
@@ -20,7 +18,6 @@
     "Workspace": {
       "$properties": {
         "StreamingEnabled": false,
-        "FallenPartsDestroyHeight": -80,
         "Gravity": 196.2
       }
     },
@@ -31,6 +28,7 @@
     },
     "Lighting": {
       "$properties": {
+        "Technology": "Voxel",
         "Brightness": 2,
         "ClockTime": 14,
         "GlobalShadows": true,

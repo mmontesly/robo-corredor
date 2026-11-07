@@ -9,16 +9,88 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+print("[Nodex] cliente: script iniciou")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local playerGui = player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 10)
+local bootLabel = nil
+
+if playerGui then
+	local bootGui = Instance.new("ScreenGui")
+	bootGui.Name = "NodexBoot"
+	bootGui.ResetOnSpawn = false
+	bootGui.DisplayOrder = 50
+	bootGui.Parent = playerGui
+	bootLabel = Instance.new("TextLabel")
+	bootLabel.Name = "Status"
+	bootLabel.AnchorPoint = Vector2.new(0.5, 0)
+	bootLabel.Position = UDim2.new(0.5, 0, 0, 8)
+	bootLabel.Size = UDim2.new(0.92, 0, 0, 72)
+	bootLabel.BackgroundColor3 = Color3.fromRGB(255, 248, 230)
+	bootLabel.TextColor3 = Color3.fromRGB(2, 48, 71)
+	bootLabel.Font = Enum.Font.SourceSansBold
+	bootLabel.TextSize = 20
+	bootLabel.TextWrapped = true
+	bootLabel.Text = "Nodex: cliente iniciou. Esperando a Fábrica…"
+	bootLabel.Parent = bootGui
+else
+	warn("[Nodex] cliente: PlayerGui não apareceu em 10 s")
+	return
+end
+
+local function aimCamera()
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	cam.FieldOfView = 68
+	if root then
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.CFrame = CFrame.lookAt(Vector3.new(root.Position.X - 4, root.Position.Y + 6.2, 32), root.Position + Vector3.new(12, 1.2, 0))
+	elseif Workspace:FindFirstChild("NodexWorld") or Workspace:FindFirstChild("NodexSafety") or Workspace:FindFirstChild("NodexBootSign") then
+		cam.CameraType = Enum.CameraType.Scriptable
+		cam.CFrame = CFrame.lookAt(Vector3.new(18, 20, 52), Vector3.new(0, 6, -8))
+	end
+end
+
+RunService:BindToRenderStep("NodexBootCamera", Enum.RenderPriority.Camera.Value + 1, aimCamera)
+
+local function bootMessage(text, bad)
+	if bad then
+		warn("[Nodex] cliente: " .. text)
+	else
+		print("[Nodex] cliente: " .. text)
+	end
+	if bootLabel then
+		bootLabel.Text = text
+		bootLabel.TextColor3 = bad and Color3.fromRGB(120, 16, 16) or Color3.fromRGB(2, 48, 71)
+	end
+end
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 10)
+if not Shared then
+	bootMessage("ERRO: ReplicatedStorage.Shared não chegou em 10 s.", true)
+	return
+end
 local Config = require(Shared:WaitForChild("Config"))
 local Rules = require(Shared:WaitForChild("Rules"))
 local Hud = require(script.Parent:WaitForChild("Hud"))
 
-local player = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
-local remotes = ReplicatedStorage:WaitForChild("NodexRemotes", 30)
-local action = remotes:WaitForChild("Action")
-local stateRemote = remotes:WaitForChild("State")
+local remotes = ReplicatedStorage:WaitForChild("NodexRemotes", 15)
+if not remotes then
+	bootMessage("ERRO: o servidor não criou NodexRemotes em 15 s. No Output, a primeira linha do servidor tem de ser [Nodex] boot: script do servidor iniciou. Se essa linha não existe, o script do servidor não rodou. Se existir FALHA NO BOOT, o erro está nessa mensagem e na placa vermelha.", true)
+	return
+end
+local action = remotes:WaitForChild("Action", 5)
+local stateRemote = remotes:WaitForChild("State", 5)
+if not action or not stateRemote then
+	bootMessage("ERRO: NodexRemotes chegou sem Action ou State.", true)
+	return
+end
+bootMessage("Nodex: conectado ao servidor.", false)
 
 local keys = {
 	w = false,
@@ -161,12 +233,16 @@ local function drive(_dt)
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if camera then
-		camera.CameraType = Enum.CameraType.Scriptable
 		camera.FieldOfView = 68
 		if hrp then
+			camera.CameraType = Enum.CameraType.Scriptable
 			local look = hrp.Position + Vector3.new(12, 1.2, 0)
 			local camPos = Vector3.new(hrp.Position.X - 4, hrp.Position.Y + 6.2, 32)
 			camera.CFrame = CFrame.lookAt(camPos, look)
+		elseif Workspace:FindFirstChild("NodexWorld") or Workspace:FindFirstChild("NodexSafety") or Workspace:FindFirstChild("NodexBootSign") then
+			-- Sem avatar a câmera do Studio fica no céu. Aponta para o chão que o servidor já criou.
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera.CFrame = CFrame.lookAt(Vector3.new(18, 20, 52), Vector3.new(0, 6, -8))
 		end
 	end
 	if not hum or not hrp or hum.Health <= 0 or hrp.Anchored then
@@ -219,6 +295,9 @@ stateRemote.OnClientEvent:Connect(function(snapshot)
 	latest = snapshot
 	hud.render(snapshot)
 	applyCollected(snapshot.you and snapshot.you.collected or {})
+	if bootLabel and bootLabel.Parent then
+		bootLabel.Parent.Enabled = false
+	end
 end)
 
 CollectionService:GetInstanceAddedSignal(Config.TAG_PICKUP):Connect(function()

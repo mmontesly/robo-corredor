@@ -83,6 +83,8 @@ function RobotFactory.install()
 	})
 	hrp.Transparency = 1
 	hrp.RootPriority = 1
+	hrp.CanQuery = true
+	hrp.CanTouch = true
 
 	local torso = part({
 		name = "Torso",
@@ -197,13 +199,6 @@ function RobotFactory.install()
 		end
 	end
 	humanoid.Parent = model
-
-	-- LocalScript vazio com o nome Animate: o motor não injeta o Animate padrão
-	-- (aquele puxaria animações por asset id). O balanço das pernas fica no cliente.
-	local animate = Instance.new("LocalScript")
-	animate.Name = "Animate"
-	animate.Parent = model
-
 	model.PrimaryPart = hrp
 	model.Parent = StarterPlayer
 

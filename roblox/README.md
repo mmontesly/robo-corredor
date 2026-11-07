@@ -6,6 +6,23 @@ O app original não foi alterado. Não há deploy, upload para a Roblox, conta n
 
 No modo de edição o Workspace parece vazio. A pista **não está desenhada no arquivo**: o servidor constrói a Fábrica quando o Play começa, só com `Part`s. Não usa Toolbox, decal, mesh, som nem animação da plataforma.
 
+## Se o Play mostrar só o céu
+
+Isso foi o que aconteceu na primeira abertura. O arquivo antigo gravava `FallenPartsDestroyHeight = -80` com o Workspace **sem nenhum chão**. O cliente também não desenhava a interface enquanto esperava um remote que só existe depois da fábrica pronta. Qualquer erro antes disso apagava o personagem e deixava a câmera no céu, sem cartão.
+
+Agora o servidor cria um chão laranja e uma placa **antes** de montar o robô e a pista. O cliente mostra uma faixa no topo assim que o script dele começa, e aponta a câmera para esse chão mesmo sem avatar.
+
+1. Abra o `.rbxlx` novo e aperte **Play**.
+2. Aba **View → Output**.
+3. A primeira linha do servidor tem de ser exatamente:
+
+   `[Nodex] boot: script do servidor iniciou`
+
+4. Em seguida: `[Nodex] boot: chão de segurança pronto` e `[Nodex] boot: Fábrica pronta`.
+5. No cliente: `[Nodex] cliente: script iniciou`.
+
+Se a linha do **boot** não existir, o script do servidor não rodou (o Output fica só com mensagens padrão do Studio). Se existir `[Nodex] FALHA NO BOOT`, o erro completo está nessa mensagem e numa placa vermelha no mundo. A faixa de cima do cliente repete o mesmo texto. Não fica mais uma espera infinita sem aviso.
+
 ## O que este protótipo já faz
 
 - Sala de **1 a 8** robôs. **Treino solo** funciona (não precisa de outra pessoa para ver a corrida).
@@ -145,6 +162,7 @@ Isto **não** é um teste dentro do Roblox Studio nem num celular. Esta máquina
 
 - **Luau 0.746** `luau-compile --only-parse` nos 10 arquivos `.luau` (sintaxe).
 - **Lune 0.11.1** `lune run tests/check.luau`: **97 checagens**. Inclui velocidade, pódio, DNF de 20 s, apelidos, cores, a validação da pista e uma simulação cinética (mesma gravidade e o mesmo pulo) em que quem pula termina em **34,00 s** com **7 baterias** e **4 postos**, e quem não pula para na primeira engrenagem.
+- **Lune** `lune run tests/boot_order.luau`: executa o boot de verdade. O chão é criado antes do robô e da pista. Se o robô ou a pista quebram, o erro é reportado e a corrida não continua em silêncio.
 - **Rojo 7.7.1** `rojo build` gerou `Nodex-Robo-Corredor.rbxlx` com `MaxPlayersInternal = 8` e `StreamingEnabled = false`.
 
 Para repetir, na pasta `roblox/`:
