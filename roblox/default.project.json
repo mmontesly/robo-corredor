@@ -1,0 +1,45 @@
+{
+  "name": "NodexRoboCorredor",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "NodexServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "src/client"
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false,
+        "FallenPartsDestroyHeight": -80,
+        "Gravity": 196.2
+      }
+    },
+    "Players": {
+      "$properties": {
+        "MaxPlayers": 8
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Brightness": 2,
+        "ClockTime": 14,
+        "GlobalShadows": true,
+        "Ambient": [0.7, 0.62, 0.45],
+        "OutdoorAmbient": [0.78, 0.66, 0.45],
+        "FogColor": [1, 0.91, 0.64],
+        "FogStart": 180,
+        "FogEnd": 700
+      }
+    }
+  }
+}

@@ -1,0 +1,3354 @@
+<roblox version="4">
+  <Item class="Lighting" referent="0">
+    <Properties>
+      <string name="Name">Lighting</string>
+      <Color3 name="Ambient">
+        <R>0.7</R>
+        <G>0.62</G>
+        <B>0.45</B>
+      </Color3>
+      <float name="Brightness">2</float>
+      <float name="ClockTime">14</float>
+      <Color3 name="FogColor">
+        <R>1</R>
+        <G>0.91</G>
+        <B>0.64</B>
+      </Color3>
+      <float name="FogEnd">700</float>
+      <float name="FogStart">180</float>
+      <bool name="GlobalShadows">true</bool>
+      <Color3 name="OutdoorAmbient">
+        <R>0.78</R>
+        <G>0.66</G>
+        <B>0.45</B>
+      </Color3>
+    </Properties>
+  </Item>
+  <Item class="Players" referent="1">
+    <Properties>
+      <string name="Name">Players</string>
+      <int name="MaxPlayersInternal">8</int>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="2">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="3">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Textos, apelidos e cores do Nodex: Robô Corredor.
+-- Sem instâncias do Roblox neste arquivo, para os testes rodarem fora do Studio.
+-- Color3 só é criado quando o jogo chama toColor3.
+
+local Config = {}
+
+Config.TITLE = "Nodex: Robô Corredor"
+Config.WORLD = "Fábrica"
+Config.TIP_JUMP = "Pule as engrenagens e o óleo!"
+Config.TIP_BATTERY = "Baterias dão turbo!"
+Config.TIP_TOUCH = "Toque para o Nodex pular."
+
+-- Os mesmos apelidos fechados do app (sem texto livre).
+Config.NICKS = {
+	"Raio",
+	"Foguete",
+	"Turbo",
+	"Faísca",
+	"Pipoca",
+	"Trovão",
+	"Cometa",
+	"Bolinha",
+	"Pulinho",
+	"Parafuso",
+	"Estrela",
+	"Biscoito",
+}
+
+-- As 8 primeiras cores do app. Vermelho e Folha ficam de fora: a sala Roblox cabe 8.
+Config.COLORS = {
+	{ name = "Azul", r = 76, g = 201, b = 240 },
+	{ name = "Rosa", r = 255, g = 0, b = 110 },
+	{ name = "Roxo", r = 131, g = 56, b = 236 },
+	{ name = "Verde", r = 6, g = 214, b = 160 },
+	{ name = "Laranja", r = 251, g = 86, b = 7 },
+	{ name = "Amarelo", r = 255, g = 190, b = 11 },
+	{ name = "Anil", r = 58, g = 134, b = 255 },
+	{ name = "Marrom", r = 141, g = 110, b = 99 },
+}
+
+Config.SKY = { r = 255, g = 232, b = 163 }
+Config.GROUND = { r = 108, g = 117, b = 125 }
+Config.BELT = { r = 251, g = 133, b = 0 }
+Config.OIL = { r = 29, g = 53, b = 87 }
+Config.NAVY = { r = 2, g = 48, b = 71 }
+Config.ORANGE = { r = 251, g = 86, b = 7 }
+Config.TEAL = { r = 6, g = 214, b = 160 }
+Config.TITLE_ORANGE = { r = 255, g = 102, b = 0 }
+Config.BAR = { r = 46, g = 196, b = 182 }
+Config.WHITE = { r = 255, g = 255, b = 255 }
+Config.INK = { r = 2, g = 48, b = 71 }
+Config.BATTERY = { r = 126, g = 214, b = 90 }
+Config.BATTERY_CAP = { r = 255, g = 214, b = 70 }
+Config.GEAR = { r = 90, g = 99, b = 110 }
+Config.GEAR_TOOTH = { r = 70, g = 78, b = 88 }
+
+Config.MACHINES = {
+	{ r = 142, g = 202, b = 230 },
+	{ r = 160, g = 196, b = 255 },
+	{ r = 189, g = 178, b = 255 },
+	{ r = 155, g = 246, b = 255 },
+}
+
+Config.CONFETTI = {
+	{ r = 255, g = 0, b = 110 },
+	{ r = 251, g = 86, b = 7 },
+	{ r = 255, g = 190, b = 11 },
+	{ r = 6, g = 214, b = 160 },
+	{ r = 58, g = 134, b = 255 },
+	{ r = 131, g = 56, b = 236 },
+}
+
+Config.TAG_TOOTH = "NodexTooth"
+Config.TAG_PICKUP = "NodexPickup"
+Config.TAG_CHEVRON = "NodexChevron"
+Config.TAG_BOB = "NodexBob"
+
+function Config.isNick(value: any): boolean
+	if type(value) ~= "string" then
+		return false
+	end
+	for _, nick in ipairs(Config.NICKS) do
+		if nick == value then
+			return true
+		end
+	end
+	return false
+end
+
+function Config.toColor3(c: { r: number, g: number, b: number })
+	return Color3.fromRGB(c.r, c.g, c.b)
+end
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Course</string>
+          <string name="Source"><![CDATA[-- Pista única da Fábrica, gerada por código (sem asset externo).
+-- Os centros abaixo deixam pelo menos 20 studs entre as bordas dos obstáculos,
+-- tempo para pousar e pular de novo a 22 studs/s com JumpHeight 8.5.
+
+local Course = {}
+
+Course.FLOOR_TOP = 4
+Course.LANE_HALF = 8.5
+Course.HIP = 3
+Course.BODY_RADIUS = 1.5
+Course.GEAR_DIAMETER = 3.6
+Course.OIL_LENGTH = 9
+Course.BATTERY_LENGTH = 5.2
+Course.START_X = 0
+Course.FINISH_X = 748
+Course.SPAWN_X = -4
+Course.TRACK_MIN_X = -40
+Course.TRACK_END = 810
+Course.LOBBY_MIN_X = -112
+Course.LOBBY_MAX_X = -54
+Course.LOBBY_HALF_Z = 16
+Course.MIN_EDGE_GAP = 20
+Course.RESPAWN_BACK = 12
+
+Course.CHECKPOINTS = {
+	{ index = 1, x = 152.7 },
+	{ index = 2, x = 305.9 },
+	{ index = 3, x = 460.3 },
+	{ index = 4, x = 614.7 },
+}
+
+Course.OBSTACLES = {
+	{ id = "g1", kind = "gear", x = 58.0 },
+	{ id = "o1", kind = "oil", x = 90.5 },
+	{ id = "b1", kind = "battery", x = 123.6, lift = "low" },
+	{ id = "g2", kind = "gear", x = 181.2 },
+	{ id = "o2", kind = "oil", x = 213.7 },
+	{ id = "b2", kind = "battery", x = 246.8, lift = "high" },
+	{ id = "g3", kind = "gear", x = 277.4 },
+	{ id = "b6", kind = "battery", x = 335.0, lift = "low" },
+	{ id = "g4", kind = "gear", x = 365.6 },
+	{ id = "o3", kind = "oil", x = 398.1 },
+	{ id = "b3", kind = "battery", x = 431.2, lift = "high" },
+	{ id = "o4", kind = "oil", x = 491.3 },
+	{ id = "g5", kind = "gear", x = 523.8 },
+	{ id = "b7", kind = "battery", x = 554.4, lift = "low" },
+	{ id = "b4", kind = "battery", x = 585.6, lift = "high" },
+	{ id = "g6", kind = "gear", x = 643.2 },
+	{ id = "o5", kind = "oil", x = 675.7 },
+	{ id = "b5", kind = "battery", x = 708.8, lift = "low" },
+}
+
+export type Box = {
+	id: string,
+	kind: string,
+	x: number,
+	y: number,
+	z: number,
+	hx: number,
+	hy: number,
+	hz: number,
+	lift: string?,
+	feetCut: number?,
+}
+
+function Course.checkpointCount(): number
+	return #Course.CHECKPOINTS
+end
+
+local function halfX(kind: string): number
+	if kind == "gear" then
+		return Course.GEAR_DIAMETER / 2
+	elseif kind == "oil" then
+		return Course.OIL_LENGTH / 2
+	elseif kind == "battery" then
+		return Course.BATTERY_LENGTH / 2
+	end
+	return 1
+end
+
+function Course.boxes(): { Box }
+	local list = {}
+	for _, ob in ipairs(Course.OBSTACLES) do
+		local hx = halfX(ob.kind)
+		local box: Box = {
+			id = ob.id,
+			kind = ob.kind,
+			x = ob.x,
+			z = 0,
+			hx = hx,
+			hy = 1,
+			hz = Course.LANE_HALF,
+			y = Course.FLOOR_TOP,
+			lift = ob.lift,
+		}
+		if ob.kind == "gear" then
+			box.y = Course.FLOOR_TOP + Course.GEAR_DIAMETER / 2
+			box.hy = Course.GEAR_DIAMETER / 2
+			box.feetCut = Course.FLOOR_TOP + Course.GEAR_DIAMETER - 0.55
+		elseif ob.kind == "oil" then
+			box.y = Course.FLOOR_TOP + 0.25
+			box.hy = 0.4
+			box.feetCut = Course.FLOOR_TOP + 2.15
+		else
+			local high = ob.lift == "high"
+			box.y = Course.FLOOR_TOP + (high and 8.35 or 3.15)
+			box.hy = high and 1.25 or 1.45
+		end
+		table.insert(list, box)
+	end
+	return list
+end
+
+function Course.inLane(pz: number): boolean
+	return math.abs(pz) <= Course.LANE_HALF + 1
+end
+
+function Course.penalizeGear(feetY: number, px: number, pz: number, box: Box): boolean
+	if box.kind ~= "gear" or box.feetCut == nil then
+		return false
+	end
+	if not Course.inLane(pz) then
+		return false
+	end
+	if math.abs(px - box.x) > box.hx + Course.BODY_RADIUS + 0.35 then
+		return false
+	end
+	return feetY < box.feetCut
+end
+
+function Course.penalizeOil(feetY: number, px: number, pz: number, box: Box, grounded: boolean?): boolean
+	if box.kind ~= "oil" or box.feetCut == nil then
+		return false
+	end
+	if not Course.inLane(pz) then
+		return false
+	end
+	if math.abs(px - box.x) > box.hx + 0.4 then
+		return false
+	end
+	if feetY < box.feetCut then
+		return true
+	end
+	return grounded == true and feetY < box.feetCut + 0.4
+end
+
+function Course.collectBattery(hrpY: number, px: number, pz: number, box: Box): boolean
+	if box.kind ~= "battery" then
+		return false
+	end
+	if not Course.inLane(pz) then
+		return false
+	end
+	if math.abs(px - box.x) > box.hx + Course.BODY_RADIUS then
+		return false
+	end
+	return math.abs(hrpY - box.y) <= box.hy + 1.35
+end
+
+function Course.clearedCheckpoint(px: number, lastIndex: number)
+	local nextIndex = lastIndex + 1
+	local cp = Course.CHECKPOINTS[nextIndex]
+	if cp and cp.index == nextIndex and px >= cp.x then
+		return cp
+	end
+	return nil
+end
+
+function Course.canFinish(px: number, checkpointIndex: number): boolean
+	return checkpointIndex >= #Course.CHECKPOINTS and px >= Course.FINISH_X
+end
+
+function Course.slotPose(slot: number): (number, number, number, number)
+	local x = Course.SPAWN_X - (slot - 1) * 3.5
+	local z = (slot % 2 == 0) and 1.8 or -1.8
+	local y = Course.FLOOR_TOP + Course.HIP
+	return x, y, z, -math.pi / 2
+end
+
+function Course.lobbyPose(slot: number): (number, number, number, number)
+	local x = -70 - (slot - 1) * 3.2
+	local z = (slot % 2 == 0) and 5 or -5
+	local y = Course.FLOOR_TOP + Course.HIP
+	return x, y, z, -math.pi / 2
+end
+
+function Course.respawnPose(slot: number, checkpointIndex: number): (number, number, number, number)
+	local _, _, z, yaw = Course.slotPose(slot)
+	local y = Course.FLOOR_TOP + Course.HIP
+	if checkpointIndex <= 0 then
+		local x = select(1, Course.slotPose(slot))
+		return x, y, z, yaw
+	end
+	local cp = Course.CHECKPOINTS[checkpointIndex]
+	return cp.x - Course.RESPAWN_BACK, y, z, yaw
+end
+
+function Course.finishHoldPose(orderIndex: number, slot: number): (number, number, number, number)
+	local x = Course.FINISH_X + 12 + (orderIndex - 1) * 4.5
+	local z = (slot % 2 == 0) and 2.2 or -2.2
+	local y = Course.FLOOR_TOP + Course.HIP
+	return x, y, z, -math.pi / 2
+end
+
+function Course.podiumPose(rank: number, _slot: number): (number, number, number, number, number)
+	local yaw = -math.pi / 2
+	local x, z, extra
+	if rank == 1 then
+		x, z, extra = -74, 0, 3.2
+	elseif rank == 2 then
+		x, z, extra = -86, 0, 2.0
+	elseif rank == 3 then
+		x, z, extra = -64, 0, 1.15
+	else
+		local i = math.max(0, rank - 4)
+		x = -102
+		z = -8 + i * 3.2
+		extra = 0
+	end
+	local y = Course.FLOOR_TOP + extra + Course.HIP
+	return x, y, z, yaw, extra
+end
+
+local function inside(x: number, left: number, right: number): boolean
+	return x >= left and x <= right
+end
+
+function Course.validate(): (boolean, { string })
+	local errors = {}
+	local function bad(msg: string)
+		table.insert(errors, msg)
+	end
+
+	local ids = {}
+	local counts = { gear = 0, oil = 0, battery = 0 }
+	for _, ob in ipairs(Course.OBSTACLES) do
+		if ids[ob.id] then
+			bad("id repetido " .. ob.id)
+		end
+		ids[ob.id] = true
+		if ob.kind ~= "gear" and ob.kind ~= "oil" and ob.kind ~= "battery" then
+			bad("tipo inválido " .. tostring(ob.kind))
+		else
+			counts[ob.kind] += 1
+		end
+		if ob.kind == "battery" and ob.lift ~= "low" and ob.lift ~= "high" then
+			bad("bateria sem altura " .. ob.id)
+		end
+		if ob.x <= Course.START_X + 40 then
+			bad("obstáculo cedo demais " .. ob.id)
+		end
+		if ob.x >= Course.FINISH_X - 20 then
+			bad("obstáculo perto demais da chegada " .. ob.id)
+		end
+	end
+	if counts.gear < 1 or counts.oil < 1 or counts.battery < 1 then
+		bad("faltou engrenagem, óleo ou bateria")
+	end
+
+	local boxes = Course.boxes()
+	table.sort(boxes, function(a, b)
+		return a.x < b.x
+	end)
+	for i = 2, #boxes do
+		local prev = boxes[i - 1]
+		local cur = boxes[i]
+		local gap = (cur.x - cur.hx) - (prev.x + prev.hx)
+		if gap < Course.MIN_EDGE_GAP then
+			bad(string.format("vão %.1f entre %s e %s", gap, prev.id, cur.id))
+		end
+	end
+
+	local last = boxes[#boxes]
+	if Course.FINISH_X - (last.x + last.hx) < 24 then
+		bad("chegada curta")
+	end
+
+	for i, cp in ipairs(Course.CHECKPOINTS) do
+		if cp.index ~= i then
+			bad("índice de posto " .. tostring(cp.index))
+		end
+		if i > 1 and cp.x <= Course.CHECKPOINTS[i - 1].x + 40 then
+			bad("postos próximos demais")
+		end
+		for _, box in ipairs(boxes) do
+			if inside(cp.x, box.x - box.hx, box.x + box.hx) then
+				bad("posto " .. tostring(i) .. " dentro de " .. box.id)
+			end
+		end
+		local back = cp.x - Course.RESPAWN_BACK
+		for _, box in ipairs(boxes) do
+			if inside(back, box.x - box.hx - 2, box.x + box.hx + 2) then
+				bad("renascimento do posto " .. tostring(i) .. " dentro de " .. box.id)
+			end
+		end
+		if back <= Course.START_X then
+			bad("renascimento antes da largada")
+		end
+	end
+
+	local lastCp = Course.CHECKPOINTS[#Course.CHECKPOINTS]
+	if lastCp.x >= Course.FINISH_X - 30 then
+		bad("último posto colado na chegada")
+	end
+
+	for slot = 1, 8 do
+		local x, y, z = Course.slotPose(slot)
+		if x <= Course.TRACK_MIN_X + 3 or x >= Course.START_X then
+			bad("largada do robô " .. tostring(slot) .. " fora da reta")
+		end
+		if y ~= Course.FLOOR_TOP + Course.HIP then
+			bad("altura da largada")
+		end
+		if math.abs(z) > Course.LANE_HALF - 2 then
+			bad("largada fora da pista")
+		end
+
+		local lx, ly, lz = Course.lobbyPose(slot)
+		if lx <= Course.LOBBY_MIN_X + 4 or lx >= Course.LOBBY_MAX_X - 4 then
+			bad("lobby do robô " .. tostring(slot))
+		end
+		if math.abs(lz) > Course.LOBBY_HALF_Z - 2 then
+			bad("lobby Z")
+		end
+		if ly ~= Course.FLOOR_TOP + Course.HIP then
+			bad("altura do lobby")
+		end
+	end
+
+	for rank = 1, 8 do
+		local px, py, pz, _, extra = Course.podiumPose(rank, rank)
+		if px <= Course.LOBBY_MIN_X + 2 or px >= Course.LOBBY_MAX_X - 2 then
+			bad("pódio " .. tostring(rank) .. " fora do lobby")
+		end
+		if math.abs(pz) > Course.LOBBY_HALF_Z - 2 then
+			bad("pódio Z " .. tostring(rank))
+		end
+		if py ~= Course.FLOOR_TOP + extra + Course.HIP then
+			bad("altura do pódio")
+		end
+	end
+
+	local holdX = select(1, Course.finishHoldPose(8, 8))
+	if holdX >= Course.TRACK_END - 4 then
+		bad("espera da chegada passa do chão")
+	end
+
+	return #errors == 0, errors
+end
+
+return Course
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Rules</string>
+          <string name="Source"><![CDATA[-- Regras da corrida, em unidades do Roblox.
+-- O app React usa 285 px/s, gravidade 2600 px/s² e impulso de pulo 980 px/s.
+-- Aqui a gravidade é a padrão do Roblox (196.2) e a corrida anda a 22 studs/s.
+-- Óleo/engrenagem e bateria mantêm a mesma fração e a mesma duração do app:
+--   devagar = 0,5× por 1 s; turbo = 1,35× por 1,2 s.
+-- O tempo esgotado continua 20 s depois de o primeiro chegar.
+
+local Rules = {}
+
+Rules.BASE_SPEED = 22
+Rules.SLOW_MULT = 0.5
+Rules.SLOW_TIME = 1
+Rules.TURBO_MULT = 1.35
+Rules.TURBO_TIME = 1.2
+Rules.JUMP_HEIGHT = 8.5
+Rules.GRAVITY = 196.2
+Rules.LOBBY_SPEED = 18
+Rules.COUNTDOWN_SECONDS = 3
+Rules.DNF_AFTER = 20
+Rules.PODIUM_HOLD = 16
+Rules.RESET_COOLDOWN = 3
+Rules.MAX_PLAYERS = 8
+Rules.ALLOWANCE_SLACK = 6
+Rules.ALLOWANCE_AHEAD = 12
+Rules.REWIND_PAD = 4
+
+function Rules.speed(slowLeft: number, turboLeft: number): number
+	local mult = 1
+	if slowLeft > 0 then
+		mult *= Rules.SLOW_MULT
+	end
+	if turboLeft > 0 then
+		mult *= Rules.TURBO_MULT
+	end
+	return Rules.BASE_SPEED * mult
+end
+
+function Rules.currentSpeed(now: number, slowUntil: number, turboUntil: number): number
+	return Rules.speed(slowUntil - now, turboUntil - now)
+end
+
+function Rules.jumpVelocity(gravity: number?): number
+	local g = gravity or Rules.GRAVITY
+	return math.sqrt(2 * g * Rules.JUMP_HEIGHT)
+end
+
+function Rules.formatTime(seconds: number?): string
+	if seconds == nil then
+		return "--"
+	end
+	if seconds < 0 then
+		seconds = 0
+	end
+	local totalCs = math.floor(seconds * 100 + 0.5)
+	local cs = totalCs % 100
+	local totalS = math.floor(totalCs / 100)
+	local s = totalS % 60
+	local m = math.floor(totalS / 60)
+	return string.format("%d:%02d.%02d", m, s, cs)
+end
+
+function Rules.ordinal(n: number): string
+	return tostring(n) .. "º"
+end
+
+export type Standing = {
+	id: number,
+	finished: boolean,
+	time: number?,
+	x: number,
+	slot: number,
+	gone: boolean?,
+}
+
+function Rules.placeOf(selfId: number, rows: { Standing }): number?
+	local active = {}
+	for _, row in ipairs(rows) do
+		if not row.gone then
+			table.insert(active, row)
+		end
+	end
+	table.sort(active, function(a, b)
+		if a.finished ~= b.finished then
+			return a.finished
+		end
+		if a.finished and b.finished then
+			local ta = a.time or math.huge
+			local tb = b.time or math.huge
+			if ta ~= tb then
+				return ta < tb
+			end
+			return a.slot < b.slot
+		end
+		if a.x ~= b.x then
+			return a.x > b.x
+		end
+		return a.slot < b.slot
+	end)
+	for i, row in ipairs(active) do
+		if row.id == selfId then
+			return i
+		end
+	end
+	return nil
+end
+
+export type ResultRow = {
+	id: number,
+	finished: boolean,
+	dnf: boolean,
+	gone: boolean,
+	time: number?,
+	slot: number,
+}
+
+function Rules.podium(rows: { ResultRow }): { ResultRow }
+	local copy = table.clone(rows)
+	table.sort(copy, function(a, b)
+		local function rank(r: ResultRow): number
+			if r.finished then
+				return 1
+			end
+			if r.dnf then
+				return 2
+			end
+			return 3
+		end
+		local ra = rank(a)
+		local rb = rank(b)
+		if ra ~= rb then
+			return ra < rb
+		end
+		if ra == 1 then
+			local ta = a.time or math.huge
+			local tb = b.time or math.huge
+			if ta ~= tb then
+				return ta < tb
+			end
+		end
+		return a.slot < b.slot
+	end)
+	return copy
+end
+
+export type RoundState = "racing" | "finished" | "dnf" | "gone"
+
+function Rules.roundStatus(now: number, firstFinishAt: number?, states: { RoundState }): string
+	local racing = 0
+	for _, state in ipairs(states) do
+		if state == "racing" then
+			racing += 1
+		end
+	end
+	if racing == 0 then
+		return "done"
+	end
+	if firstFinishAt ~= nil and (now - firstFinishAt) >= Rules.DNF_AFTER then
+		return "dnf_rest"
+	end
+	return "continue"
+end
+
+return Rules
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="7">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="8">
+      <Properties>
+        <string name="Name">NodexServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">CourseBuilder</string>
+          <string name="Source"><![CDATA[-- Constrói a Fábrica com Parts. Nada de Toolbox, decal, mesh ou som.
+
+local CollectionService = game:GetService("CollectionService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Course = require(Shared:WaitForChild("Course"))
+
+local CourseBuilder = {}
+
+local function color(c)
+	return Config.toColor3(c)
+end
+
+local function part(parent: Instance, props): Part
+	local p = Instance.new("Part")
+	p.Name = props.name or "Part"
+	p.Size = props.size
+	p.CFrame = props.cframe
+	p.Color = props.color
+	p.Material = props.material or Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = props.collide == true
+	p.CanTouch = false
+	p.CanQuery = props.query ~= false
+	p.CastShadow = props.shadow ~= false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props.transparency then
+		p.Transparency = props.transparency
+	end
+	if props.shape then
+		p.Shape = props.shape
+	end
+	p.Parent = parent
+	return p
+end
+
+local function floorRun(parent: Instance, x0: number, x1: number, widthZ: number, centerZ: number)
+	local gray = color(Config.GROUND)
+	local orange = color(Config.BELT)
+	local x = x0
+	while x < x1 - 0.1 do
+		local len = math.min(40, x1 - x)
+		local cx = x + len / 2
+		part(parent, {
+			name = "Base",
+			size = Vector3.new(len, 3.2, widthZ),
+			cframe = CFrame.new(cx, Course.FLOOR_TOP - 1.75, centerZ),
+			color = gray,
+			collide = true,
+		})
+		part(parent, {
+			name = "Belt",
+			size = Vector3.new(len, 0.3, widthZ),
+			cframe = CFrame.new(cx, Course.FLOOR_TOP - 0.15, centerZ),
+			color = orange,
+			collide = true,
+			shadow = false,
+		})
+		x += len
+	end
+end
+
+local function chevron(parent: Instance, x: number, y: number, z: number)
+	local white = Color3.fromRGB(236, 240, 244)
+	for _, tilt in ipairs({ 38, -38 }) do
+		local sign = tilt > 0 and 1 or -1
+		local p = part(parent, {
+			name = "Chevron",
+			size = Vector3.new(1.35, 0.22, 0.18),
+			cframe = CFrame.new(x, y + sign * 0.32, z) * CFrame.Angles(0, 0, math.rad(tilt)),
+			color = white,
+			shadow = false,
+		})
+		p:SetAttribute("Home", p.CFrame)
+		CollectionService:AddTag(p, Config.TAG_CHEVRON)
+	end
+end
+
+local function gear(parent: Instance, box)
+	local model = Instance.new("Model")
+	model.Name = "Gear_" .. box.id
+	local center = Vector3.new(box.x, box.y, 0)
+	local hub = part(model, {
+		name = "Hub",
+		size = Vector3.new(Course.LANE_HALF * 2, Course.GEAR_DIAMETER, Course.GEAR_DIAMETER),
+		cframe = CFrame.new(center) * CFrame.Angles(0, math.rad(90), 0),
+		color = color(Config.GEAR),
+		material = Enum.Material.Metal,
+		collide = true,
+		shape = Enum.PartType.Cylinder,
+	})
+	hub:SetAttribute("Kind", "gear")
+	hub:SetAttribute("ObstacleId", box.id)
+	local cap = part(model, {
+		name = "Cap",
+		size = Vector3.new(Course.LANE_HALF * 2 + 0.2, 1.1, 1.1),
+		cframe = CFrame.new(center) * CFrame.Angles(0, math.rad(90), 0),
+		color = color(Config.BELT),
+		collide = false,
+		shape = Enum.PartType.Cylinder,
+		shadow = false,
+	})
+	cap.CanCollide = false
+	local radius = Course.GEAR_DIAMETER / 2 + 0.7
+	for i = 1, 8 do
+		local phase = (i - 1) * (math.pi / 4)
+		local tooth = part(model, {
+			name = "Tooth",
+			size = Vector3.new(1.15, 0.7, Course.LANE_HALF * 2 - 1.2),
+			cframe = CFrame.new(center + Vector3.new(math.cos(phase) * radius, math.sin(phase) * radius, 0)),
+			color = color(Config.GEAR_TOOTH),
+			material = Enum.Material.Metal,
+			shadow = false,
+		})
+		tooth:SetAttribute("SpinCX", center.X)
+		tooth:SetAttribute("SpinCY", center.Y)
+		tooth:SetAttribute("SpinPhase", phase)
+		tooth:SetAttribute("SpinRadius", radius)
+		CollectionService:AddTag(tooth, Config.TAG_TOOTH)
+	end
+	model.PrimaryPart = hub
+	model.Parent = parent
+end
+
+local function oil(parent: Instance, box)
+	local puddle = part(parent, {
+		name = "Oil_" .. box.id,
+		size = Vector3.new(Course.OIL_LENGTH, 0.28, Course.LANE_HALF * 2 - 0.4),
+		cframe = CFrame.new(box.x, Course.FLOOR_TOP + 0.2, 0),
+		color = color(Config.OIL),
+		transparency = 0.12,
+		shadow = false,
+	})
+	puddle:SetAttribute("Kind", "oil")
+	puddle:SetAttribute("ObstacleId", box.id)
+	local shine = part(parent, {
+		name = "OilShine_" .. box.id,
+		size = Vector3.new(Course.OIL_LENGTH * 0.55, 0.08, 2.2),
+		cframe = CFrame.new(box.x, Course.FLOOR_TOP + 0.38, 1.2),
+		color = Color3.fromRGB(90, 140, 190),
+		transparency = 0.35,
+		shadow = false,
+	})
+	shine.CanCollide = false
+end
+
+local function battery(parent: Instance, box)
+	local model = Instance.new("Model")
+	model.Name = "Battery_" .. box.id
+	local y = box.y
+	local body = part(model, {
+		name = "Body",
+		size = Vector3.new(1.5, 2.3, 0.8),
+		cframe = CFrame.new(box.x, y, 0),
+		color = color(Config.BATTERY),
+		material = Enum.Material.SmoothPlastic,
+		shadow = false,
+	})
+	local cap = part(model, {
+		name = "Cap",
+		size = Vector3.new(0.7, 0.28, 0.4),
+		cframe = CFrame.new(box.x, y + 1.28, 0),
+		color = color(Config.BATTERY_CAP),
+		shadow = false,
+	})
+	local plusV = part(model, {
+		name = "PlusV",
+		size = Vector3.new(0.16, 0.7, 0.08),
+		cframe = CFrame.new(box.x, y + 0.05, 0.42),
+		color = Color3.new(1, 1, 1),
+		shadow = false,
+	})
+	local plusH = part(model, {
+		name = "PlusH",
+		size = Vector3.new(0.55, 0.16, 0.08),
+		cframe = CFrame.new(box.x, y + 0.05, 0.42),
+		color = Color3.new(1, 1, 1),
+		shadow = false,
+	})
+	local glow = part(model, {
+		name = "Glow",
+		size = Vector3.new(Course.BATTERY_LENGTH, 0.15, Course.LANE_HALF * 2 - 1),
+		cframe = CFrame.new(box.x, Course.FLOOR_TOP + 0.42, 0),
+		color = color(Config.BATTERY_CAP),
+		transparency = 0.45,
+		material = Enum.Material.Neon,
+		shadow = false,
+	})
+	local light = Instance.new("PointLight")
+	light.Color = color(Config.BATTERY)
+	light.Brightness = 1.4
+	light.Range = 14
+	light.Parent = body
+	for _, p in ipairs({ body, cap, plusV, plusH, glow }) do
+		p:SetAttribute("Home", p.CFrame)
+		p:SetAttribute("ObstacleId", box.id)
+		CollectionService:AddTag(p, Config.TAG_PICKUP)
+		CollectionService:AddTag(p, Config.TAG_BOB)
+	end
+	model.PrimaryPart = body
+	model.Parent = parent
+end
+
+local function arch(parent: Instance, x: number, labelText: string, accent)
+	local tall = 11
+	local z = Course.LANE_HALF - 0.4
+	local pillarL = part(parent, {
+		name = "Pillar",
+		size = Vector3.new(1.1, tall, 1.1),
+		cframe = CFrame.new(x, Course.FLOOR_TOP + tall / 2, -z),
+		color = accent,
+		collide = true,
+	})
+	local pillarR = part(parent, {
+		name = "Pillar",
+		size = Vector3.new(1.1, tall, 1.1),
+		cframe = CFrame.new(x, Course.FLOOR_TOP + tall / 2, z),
+		color = accent,
+		collide = true,
+	})
+	part(parent, {
+		name = "Beam",
+		size = Vector3.new(1.3, 1.1, z * 2 + 1),
+		cframe = CFrame.new(x, Course.FLOOR_TOP + tall, 0),
+		color = accent,
+		collide = true,
+	})
+	local board = part(parent, {
+		name = "Sign",
+		size = Vector3.new(4.4, 1.6, 0.3),
+		cframe = CFrame.new(x, Course.FLOOR_TOP + tall - 0.2, 0),
+		color = color(Config.WHITE),
+		shadow = false,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Back
+	gui.PixelsPerStud = 40
+	gui.Parent = board
+	local text = Instance.new("TextLabel")
+	text.BackgroundTransparency = 1
+	text.Size = UDim2.fromScale(1, 1)
+	text.Font = Enum.Font.GothamBold
+	text.TextScaled = true
+	text.TextColor3 = color(Config.NAVY)
+	text.Text = labelText
+	text.Parent = gui
+	return pillarL, pillarR
+end
+
+local function spawnPad(parent: Instance, name: string, x: number, z: number): SpawnLocation
+	local pad = Instance.new("SpawnLocation")
+	pad.Name = name
+	pad.Size = Vector3.new(6, 1, 6)
+	pad.CFrame = CFrame.new(x, Course.FLOOR_TOP - 0.5, z)
+	pad.Anchored = true
+	pad.CanCollide = false
+	pad.Transparency = 1
+	pad.Neutral = true
+	pad.Duration = 0
+	pad.Enabled = true
+	pad.CastShadow = false
+	pad.Parent = parent
+	return pad
+end
+
+local function machines(parent: Instance)
+	for i = 0, 14 do
+		local x = -10 + i * 58
+		local h = 9 + (i % 3) * 3.5
+		local tint = Config.MACHINES[(i % #Config.MACHINES) + 1]
+		local body = part(parent, {
+			name = "Machine",
+			size = Vector3.new(16, h, 6),
+			cframe = CFrame.new(x, h / 2, -18),
+			color = color(tint),
+		})
+		part(parent, {
+			name = "Window",
+			size = Vector3.new(7, 3.2, 0.3),
+			cframe = CFrame.new(x, h * 0.62, -14.85),
+			color = Color3.fromRGB(255, 248, 220),
+			material = Enum.Material.Neon,
+			transparency = 0.15,
+			shadow = false,
+		})
+		if i % 2 == 0 then
+			local stackHeight = h + 6
+			part(parent, {
+				name = "Stack",
+				size = Vector3.new(stackHeight, 2.2, 2.2),
+				cframe = CFrame.new(x + 6, stackHeight / 2, -22) * CFrame.Angles(0, 0, math.rad(90)),
+				color = color(Config.GROUND),
+				shape = Enum.PartType.Cylinder,
+			})
+		end
+		body.CanCollide = true
+	end
+	part(parent, {
+		name = "Pipe",
+		size = Vector3.new(Course.TRACK_END - Course.TRACK_MIN_X, 1.1, 1.1),
+		cframe = CFrame.new((Course.TRACK_MIN_X + Course.TRACK_END) / 2, 16, -23) * CFrame.Angles(0, 0, math.rad(90)),
+		color = color(Config.GROUND),
+		shape = Enum.PartType.Cylinder,
+	})
+end
+
+local function backdrop(parent: Instance)
+	part(parent, {
+		name = "SkyWall",
+		size = Vector3.new(Course.TRACK_END - Course.LOBBY_MIN_X + 80, 80, 2),
+		cframe = CFrame.new((Course.LOBBY_MIN_X + Course.TRACK_END) / 2, 36, -36),
+		color = color(Config.SKY),
+		shadow = false,
+		query = false,
+	})
+end
+
+local function lobbySign(parent: Instance)
+	local board = part(parent, {
+		name = "LobbySign",
+		size = Vector3.new(18, 8, 0.4),
+		cframe = CFrame.new(-78, Course.FLOOR_TOP + 7, -13),
+		color = color(Config.WHITE),
+		collide = false,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Back
+	gui.PixelsPerStud = 36
+	gui.Parent = board
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.BackgroundColor3 = color(Config.WHITE)
+	frame.Parent = gui
+	local function line(text: string, y: number, h: number, col, weight)
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Position = UDim2.fromScale(0.04, y)
+		label.Size = UDim2.fromScale(0.92, h)
+		label.Font = weight
+		label.TextScaled = true
+		label.TextColor3 = col
+		label.Text = text
+		label.Parent = frame
+	end
+	line(Config.TITLE, 0.06, 0.28, color(Config.TITLE_ORANGE), Enum.Font.GothamBold)
+	line("🏭  " .. Config.WORLD, 0.36, 0.16, color(Config.NAVY), Enum.Font.GothamBold)
+	line(Config.TIP_JUMP, 0.56, 0.16, color(Config.NAVY), Enum.Font.Gotham)
+	line(Config.TIP_BATTERY, 0.74, 0.16, color(Config.NAVY), Enum.Font.Gotham)
+end
+
+local function lessonProps(parent: Instance)
+	local z = 10
+	local baseX = -96
+	local hub = part(parent, {
+		name = "SampleGear",
+		size = Vector3.new(1.2, 3.2, 3.2),
+		cframe = CFrame.new(baseX, Course.FLOOR_TOP + 2.2, z) * CFrame.Angles(0, math.rad(90), 0),
+		color = color(Config.GEAR),
+		material = Enum.Material.Metal,
+		shape = Enum.PartType.Cylinder,
+	})
+	hub.CanCollide = false
+	local puddle = part(parent, {
+		name = "SampleOil",
+		size = Vector3.new(4, 0.25, 3),
+		cframe = CFrame.new(baseX + 6, Course.FLOOR_TOP + 0.2, z),
+		color = color(Config.OIL),
+	})
+	puddle.CanCollide = false
+	local cell = part(parent, {
+		name = "SampleBattery",
+		size = Vector3.new(1.2, 1.8, 0.6),
+		cframe = CFrame.new(baseX + 11, Course.FLOOR_TOP + 1.5, z),
+		color = color(Config.BATTERY),
+	})
+	cell.CanCollide = false
+end
+
+local function podium(parent: Instance)
+	local paints = {
+		Color3.fromRGB(255, 212, 59),
+		Color3.fromRGB(222, 226, 230),
+		Color3.fromRGB(205, 127, 50),
+	}
+	local ranks = { 2, 1, 3 }
+	for _, rank in ipairs(ranks) do
+		local x, _, _, _, extra = Course.podiumPose(rank, rank)
+		if extra > 0 then
+			local step = part(parent, {
+				name = "Podium" .. tostring(rank),
+				size = Vector3.new(6.5, extra, 7),
+				cframe = CFrame.new(x, Course.FLOOR_TOP + extra / 2, 0),
+				color = paints[rank],
+				collide = true,
+			})
+			local gui = Instance.new("BillboardGui")
+			gui.Size = UDim2.fromOffset(80, 36)
+			gui.StudsOffset = Vector3.new(0, extra / 2 + 1.2, 0)
+			gui.AlwaysOnTop = true
+			gui.Parent = step
+			local text = Instance.new("TextLabel")
+			text.BackgroundTransparency = 1
+			text.Size = UDim2.fromScale(1, 1)
+			text.Font = Enum.Font.GothamBold
+			text.TextScaled = true
+			text.TextColor3 = color(Config.NAVY)
+			text.Text = tostring(rank) .. "º"
+			text.Parent = gui
+		end
+	end
+end
+
+local function lighting()
+	Lighting.ClockTime = 14
+	Lighting.Brightness = 2
+	Lighting.GlobalShadows = true
+	Lighting.Ambient = Color3.fromRGB(180, 158, 115)
+	Lighting.OutdoorAmbient = Color3.fromRGB(200, 168, 115)
+	Lighting.FogColor = color(Config.SKY)
+	Lighting.FogStart = 180
+	Lighting.FogEnd = 700
+	local old = Lighting:FindFirstChild("NodexAtmosphere")
+	if old then
+		old:Destroy()
+	end
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Name = "NodexAtmosphere"
+	atmosphere.Density = 0.18
+	atmosphere.Offset = 0.2
+	atmosphere.Color = color(Config.SKY)
+	atmosphere.Decay = color(Config.SKY)
+	atmosphere.Glare = 0
+	atmosphere.Haze = 1.2
+	atmosphere.Parent = Lighting
+end
+
+function CourseBuilder.build()
+	local ok, errs = Course.validate()
+	if not ok then
+		error("[Nodex] Pista inválida: " .. table.concat(errs, "; "))
+	end
+
+	local previous = workspace:FindFirstChild("NodexWorld")
+	if previous then
+		previous:Destroy()
+	end
+
+	local world = Instance.new("Folder")
+	world.Name = "NodexWorld"
+	world.Parent = workspace
+
+	workspace.StreamingEnabled = false
+	workspace.FallenPartsDestroyHeight = -80
+	workspace.Gravity = 196.2
+
+	lighting()
+	backdrop(world)
+
+	local track = Instance.new("Folder")
+	track.Name = "Track"
+	track.Parent = world
+	floorRun(track, Course.TRACK_MIN_X, Course.TRACK_END, Course.LANE_HALF * 2, 0)
+
+	local lobby = Instance.new("Folder")
+	lobby.Name = "Lobby"
+	lobby.Parent = world
+	floorRun(lobby, Course.LOBBY_MIN_X, Course.LOBBY_MAX_X, Course.LOBBY_HALF_Z * 2, 0)
+	lobbySign(lobby)
+	podium(lobby)
+
+	-- Muro invisível do lado da câmera e vidro do lado da fábrica.
+	local span = Course.TRACK_END - Course.TRACK_MIN_X
+	local mid = (Course.TRACK_MIN_X + Course.TRACK_END) / 2
+	part(track, {
+		name = "NearWall",
+		size = Vector3.new(span, 14, 0.6),
+		cframe = CFrame.new(mid, Course.FLOOR_TOP + 7, Course.LANE_HALF + 1.1),
+		color = color(Config.SKY),
+		transparency = 1,
+		collide = true,
+		shadow = false,
+		query = false,
+	})
+	part(track, {
+		name = "FarGlass",
+		size = Vector3.new(span, 12, 0.5),
+		cframe = CFrame.new(mid, Course.FLOOR_TOP + 6, -Course.LANE_HALF - 0.8),
+		color = Color3.fromRGB(190, 220, 235),
+		material = Enum.Material.Glass,
+		transparency = 0.45,
+		collide = true,
+		shadow = false,
+	})
+	part(track, {
+		name = "FinishWall",
+		size = Vector3.new(1.2, 8, Course.LANE_HALF * 2),
+		cframe = CFrame.new(Course.FINISH_X + 6, Course.FLOOR_TOP + 4, 0),
+		color = color(Config.GROUND),
+		collide = true,
+	})
+
+	part(track, {
+		name = "StartLine",
+		size = Vector3.new(0.4, 0.15, Course.LANE_HALF * 2),
+		cframe = CFrame.new(Course.START_X, Course.FLOOR_TOP + 0.2, 0),
+		color = color(Config.WHITE),
+		shadow = false,
+	})
+
+	local decor = Instance.new("Folder")
+	decor.Name = "Course"
+	decor.Parent = world
+	for _, box in ipairs(Course.boxes()) do
+		if box.kind == "gear" then
+			gear(decor, box)
+		elseif box.kind == "oil" then
+			oil(decor, box)
+		else
+			battery(decor, box)
+		end
+	end
+
+	for _, cp in ipairs(Course.CHECKPOINTS) do
+		arch(decor, cp.x, "POSTO " .. tostring(cp.index), color(Config.BELT))
+	end
+	arch(decor, Course.FINISH_X, "CHEGADA", color(Config.NAVY))
+
+	local x = Course.TRACK_MIN_X + 6
+	while x < Course.TRACK_END do
+		chevron(decor, x, Course.FLOOR_TOP - 1.35, Course.LANE_HALF + 0.16)
+		x += 8
+	end
+
+	machines(decor)
+	lessonProps(lobby)
+
+	local spawns = Instance.new("Folder")
+	spawns.Name = "Spawns"
+	spawns.Parent = world
+	local pads = {
+		lobby = spawnPad(spawns, "Lobby", -78, 0),
+		track = {},
+	}
+	pads.track[0] = spawnPad(spawns, "Start", Course.SPAWN_X, 0)
+	for _, cp in ipairs(Course.CHECKPOINTS) do
+		pads.track[cp.index] = spawnPad(spawns, "Posto" .. tostring(cp.index), cp.x - Course.RESPAWN_BACK, 0)
+	end
+
+	return pads
+end
+
+return CourseBuilder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="10">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[local CourseBuilder = require(script.Parent.CourseBuilder)
+local RobotFactory = require(script.Parent.RobotFactory)
+local RaceService = require(script.Parent.RaceService)
+
+RobotFactory.install()
+local pads = CourseBuilder.build()
+RaceService.start(pads)
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">RaceService</string>
+          <string name="Source"><![CDATA[-- Corrida no servidor. O cliente só pede apelido, pronto, início, posto e pulo.
+-- Posição, bateria, óleo, engrenagem, posto, chegada e pódio são decididos aqui.
+
+local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Course = require(Shared:WaitForChild("Course"))
+local Rules = require(Shared:WaitForChild("Rules"))
+
+local RaceService = {}
+
+local started = false
+local records = {}
+local joinOrder = {}
+local diedConn = {}
+local charConn = {}
+local pads = nil
+local boxes = nil
+
+local state = {
+	phase = "lobby",
+	roundId = 0,
+	hostUserId = 0,
+	countdownEnd = 0,
+	raceStart = 0,
+	raceStartServer = 0,
+	firstFinishAt = nil,
+	podiumUntil = 0,
+	notice = "",
+	noticeUntil = 0,
+	wins = {},
+	dirty = true,
+	acc = 0,
+}
+
+local remotes
+local pushAccum = 0
+
+local function pose(x, y, z, yaw)
+	return CFrame.new(x, y, z) * CFrame.Angles(0, yaw, 0)
+end
+
+local function humanoidOf(player)
+	local char = player.Character
+	if not char then
+		return nil, nil
+	end
+	return char:FindFirstChild("HumanoidRootPart"), char:FindFirstChildOfClass("Humanoid")
+end
+
+local function setNotice(text)
+	state.notice = text
+	state.noticeUntil = os.clock() + 4
+	state.dirty = true
+end
+
+local function updateHost()
+	local host = 0
+	for _, userId in ipairs(joinOrder) do
+		if Players:GetPlayerByUserId(userId) then
+			host = userId
+			break
+		end
+	end
+	state.hostUserId = host
+	ReplicatedStorage:SetAttribute("HostUserId", host)
+end
+
+local function publishPhase()
+	ReplicatedStorage:SetAttribute("Phase", state.phase)
+	ReplicatedStorage:SetAttribute("RoundId", state.roundId)
+	ReplicatedStorage:SetAttribute("CountdownEnd", state.countdownEnd)
+	ReplicatedStorage:SetAttribute("RaceStartServer", state.raceStartServer)
+	ReplicatedStorage:SetAttribute("HostUserId", state.hostUserId)
+end
+
+local function paint(player, record)
+	local char = player.Character
+	if not char then
+		return
+	end
+	local tint = Config.COLORS[record.colorIndex]
+	local body = tint and Config.toColor3(tint) or Color3.fromRGB(76, 201, 240)
+	for _, desc in ipairs(char:GetDescendants()) do
+		if desc:IsA("BasePart") and desc:GetAttribute("Role") == "body" then
+			desc.Color = body
+		end
+	end
+	local head = char:FindFirstChild("Head")
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.DisplayName = record.nick
+		hum.UseJumpPower = false
+		hum.JumpHeight = Rules.JUMP_HEIGHT
+		hum.AutoRotate = true
+		pcall(function()
+			hum.AutoJumpEnabled = false
+		end)
+	end
+	if not head then
+		return
+	end
+	local existing = head:FindFirstChild("NickTag")
+	if existing then
+		existing:Destroy()
+	end
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "NickTag"
+	billboard.Size = UDim2.fromOffset(160, 36)
+	billboard.StudsOffset = Vector3.new(0, 2.6, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 500
+	billboard.Parent = head
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.Text = record.nick
+	label.TextColor3 = body
+	label.TextStrokeTransparency = 0.35
+	label.TextStrokeColor3 = Color3.new(1, 1, 1)
+	label.Parent = billboard
+end
+
+local function syncStats(player, record)
+	local folder = player:FindFirstChild("leaderstats")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "leaderstats"
+		local bat = Instance.new("IntValue")
+		bat.Name = "Baterias"
+		bat.Parent = folder
+		local posto = Instance.new("IntValue")
+		posto.Name = "Posto"
+		posto.Parent = folder
+		local lugar = Instance.new("IntValue")
+		lugar.Name = "Lugar"
+		lugar.Parent = folder
+		folder.Parent = player
+	end
+	folder.Baterias.Value = record.batteries or 0
+	folder.Posto.Value = record.checkpoint or 0
+	folder.Lugar.Value = record.place or 0
+end
+
+local function syncAttributes(player, record, speed)
+	player:SetAttribute("InRace", state.phase == "race" and record.inRound and not record.gone and not record.finished)
+	player:SetAttribute("Finished", record.finished == true)
+	player:SetAttribute("Spectating", record.spectating == true or (state.phase ~= "lobby" and not record.inRound))
+	player:SetAttribute("MoveSpeed", speed)
+	player:SetAttribute("Checkpoint", record.checkpoint or 0)
+	player:SetAttribute("Nick", record.nick)
+	player:SetAttribute("Slot", record.colorIndex)
+	player:SetAttribute("Ready", record.ready == true)
+end
+
+local function teleport(player, x, y, z, yaw, anchored)
+	local hrp, hum = humanoidOf(player)
+	if not hrp or not hum then
+		return
+	end
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.CFrame = pose(x, y, z, yaw)
+	hrp.Anchored = anchored
+	if anchored then
+		hum.WalkSpeed = 0
+	end
+end
+
+local function bindSpawn(player, record)
+	if not pads then
+		return
+	end
+	local pad = pads.lobby
+	if state.phase == "countdown" and record.inRound then
+		pad = pads.track[0]
+	elseif state.phase == "race" and record.inRound and not record.finished and not record.gone then
+		pad = pads.track[record.checkpoint] or pads.track[0]
+	end
+	player.RespawnLocation = pad
+end
+
+local function placeForPhase(player, record)
+	local x, y, z, yaw
+	local anchored = false
+	if state.phase == "countdown" and record.inRound then
+		x, y, z, yaw = Course.slotPose(record.slot)
+		anchored = true
+	elseif state.phase == "race" and record.inRound and not record.gone then
+		if record.finished then
+			x, y, z, yaw = Course.finishHoldPose(record.colorIndex, record.slot)
+			anchored = true
+		else
+			return
+		end
+	elseif state.phase == "podium" and record.inRound and not record.gone then
+		local rank = record.place or record.slot
+		x, y, z, yaw = Course.podiumPose(rank, record.slot)
+		anchored = true
+	else
+		x, y, z, yaw = Course.lobbyPose(record.slot)
+		anchored = false
+	end
+	teleport(player, x, y, z, yaw, anchored)
+	bindSpawn(player, record)
+end
+
+local function freeJoin(userId)
+	local nextOrder = {}
+	for _, id in ipairs(joinOrder) do
+		if id ~= userId then
+			table.insert(nextOrder, id)
+		end
+	end
+	joinOrder = nextOrder
+end
+
+local function lowestSlot(): number?
+	local used = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		local record = records[player.UserId]
+		if record then
+			used[record.slot] = true
+		end
+	end
+	for slot = 1, Rules.MAX_PLAYERS do
+		if not used[slot] then
+			return slot
+		end
+	end
+	return nil
+end
+
+local function freshRoundFields(record)
+	record.ready = false
+	record.finished = false
+	record.dnf = false
+	record.gone = false
+	record.time = nil
+	record.batteries = 0
+	record.checkpoint = 0
+	record.hit = {}
+	record.collected = {}
+	record.slowUntil = 0
+	record.turboUntil = 0
+	record.place = nil
+	record.parked = false
+	record.lastReset = 0
+	record.x = Course.SPAWN_X
+end
+
+local function ensureWin(record)
+	local entry = state.wins[record.userId]
+	if not entry then
+		entry = { count = 0, nick = record.nick, colorIndex = record.colorIndex }
+		state.wins[record.userId] = entry
+	end
+	entry.nick = record.nick
+	entry.colorIndex = record.colorIndex
+	return entry
+end
+
+local function resultRows()
+	local rows = {}
+	for userId, record in pairs(records) do
+		if record.inRound then
+			table.insert(rows, {
+				id = userId,
+				finished = record.finished == true,
+				dnf = record.dnf == true,
+				gone = record.gone == true,
+				time = record.time,
+				slot = record.colorIndex,
+				nick = record.nick,
+				batteries = record.batteries,
+				colorIndex = record.colorIndex,
+				checkpoint = record.checkpoint,
+				x = record.x or 0,
+			})
+		end
+	end
+	return rows
+end
+
+local function recomputePlaces()
+	local rows = {}
+	for userId, record in pairs(records) do
+		if record.inRound and not record.gone then
+			table.insert(rows, {
+				id = userId,
+				finished = record.finished == true,
+				time = record.time,
+				x = record.x or 0,
+				slot = record.colorIndex,
+				gone = false,
+			})
+		end
+	end
+	for userId, record in pairs(records) do
+		if record.inRound and not record.gone then
+			record.place = Rules.placeOf(userId, rows)
+		end
+	end
+end
+
+local function snapshotFor(player, now)
+	local you = records[player.UserId]
+	local speed = Rules.LOBBY_SPEED
+	if you and state.phase == "race" then
+		speed = Rules.currentSpeed(now, you.slowUntil or 0, you.turboUntil or 0)
+	end
+	local players = {}
+	for _, other in ipairs(Players:GetPlayers()) do
+		local record = records[other.UserId]
+		if record then
+			table.insert(players, {
+				userId = other.UserId,
+				nick = record.nick,
+				colorIndex = record.colorIndex,
+				ready = record.ready == true,
+				spectating = record.spectating == true,
+				inRound = record.inRound == true,
+				finished = record.finished == true,
+				place = record.place,
+				batteries = record.batteries,
+			})
+		end
+	end
+	table.sort(players, function(a, b)
+		return a.colorIndex < b.colorIndex
+	end)
+	local results = resultRows()
+	local ordered
+	if state.phase == "podium" then
+		ordered = Rules.podium(results)
+	else
+		ordered = results
+		table.sort(ordered, function(a, b)
+			return (a.place or 99) < (b.place or 99)
+		end)
+	end
+	local wins = {}
+	for userId, entry in pairs(state.wins) do
+		if entry.count > 0 then
+			table.insert(wins, {
+				userId = userId,
+				nick = entry.nick,
+				colorIndex = entry.colorIndex,
+				count = entry.count,
+			})
+		end
+	end
+	table.sort(wins, function(a, b)
+		if a.count ~= b.count then
+			return a.count > b.count
+		end
+		return a.nick < b.nick
+	end)
+	local youPack = nil
+	if you then
+		youPack = {
+			userId = player.UserId,
+			nick = you.nick,
+			colorIndex = you.colorIndex,
+			ready = you.ready == true,
+			spectating = you.spectating == true or (state.phase ~= "lobby" and not you.inRound),
+			inRound = you.inRound == true,
+			finished = you.finished == true,
+			dnf = you.dnf == true,
+			time = you.time,
+			batteries = you.batteries,
+			checkpoint = you.checkpoint,
+			place = you.place,
+			collected = you.collected,
+			slowLeft = math.max(0, (you.slowUntil or 0) - now),
+			turboLeft = math.max(0, (you.turboUntil or 0) - now),
+			isHost = player.UserId == state.hostUserId,
+			x = you.x or 0,
+		}
+	end
+	return {
+		phase = state.phase,
+		roundId = state.roundId,
+		hostUserId = state.hostUserId,
+		countdownEnd = state.countdownEnd,
+		raceStartServer = state.raceStartServer,
+		notice = (state.noticeUntil > now) and state.notice or "",
+		you = youPack,
+		players = players,
+		results = ordered,
+		wins = wins,
+		finishX = Course.FINISH_X,
+		startX = Course.START_X,
+		checkpointCount = Course.checkpointCount(),
+		maxPlayers = Rules.MAX_PLAYERS,
+		elapsed = (state.phase == "race" or state.phase == "podium") and math.max(0, now - state.raceStart) or 0,
+	}
+end
+
+local function broadcast(now)
+	if not remotes then
+		return
+	end
+	now = now or os.clock()
+	if state.phase == "race" then
+		recomputePlaces()
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local payload = snapshotFor(player, now)
+		pcall(function()
+			remotes.State:FireClient(player, payload)
+		end)
+	end
+	state.dirty = false
+end
+
+local function confetti()
+	local folder = workspace:FindFirstChild("NodexConfetti")
+	if folder then
+		folder:Destroy()
+	end
+	folder = Instance.new("Folder")
+	folder.Name = "NodexConfetti"
+	folder.Parent = workspace
+	local rng = Random.new()
+	for i = 1, 28 do
+		local tint = Config.CONFETTI[(i % #Config.CONFETTI) + 1]
+		local piece = Instance.new("Part")
+		piece.Name = "Confetti"
+		piece.Size = Vector3.new(0.6, 0.35, 0.2)
+		piece.Color = Config.toColor3(tint)
+		piece.Material = Enum.Material.SmoothPlastic
+		piece.Anchored = false
+		piece.CanCollide = false
+		piece.CanTouch = false
+		piece.CastShadow = false
+		piece.CFrame = CFrame.new(-74 + rng:NextNumber(-8, 8), Course.FLOOR_TOP + 14 + rng:NextNumber(0, 4), rng:NextNumber(-3, 3))
+		piece.AssemblyLinearVelocity = Vector3.new(rng:NextNumber(-8, 8), rng:NextNumber(4, 16), rng:NextNumber(-8, 8))
+		piece.Parent = folder
+	end
+	Debris:AddItem(folder, 6)
+end
+
+local function returnToLobby()
+	if state.phase == "lobby" then
+		return
+	end
+	state.phase = "lobby"
+	state.firstFinishAt = nil
+	state.countdownEnd = 0
+	state.raceStartServer = 0
+	local stale = {}
+	for userId, record in pairs(records) do
+		local player = Players:GetPlayerByUserId(userId)
+		if not player then
+			table.insert(stale, userId)
+		else
+			freshRoundFields(record)
+			record.inRound = false
+			record.spectating = false
+			record.ready = false
+			local x, y, z, yaw = Course.lobbyPose(record.slot)
+			teleport(player, x, y, z, yaw, false)
+			bindSpawn(player, record)
+			local _, hum = humanoidOf(player)
+			if hum then
+				hum.WalkSpeed = Rules.LOBBY_SPEED
+			end
+			syncAttributes(player, record, Rules.LOBBY_SPEED)
+			syncStats(player, record)
+		end
+	end
+	for _, userId in ipairs(stale) do
+		records[userId] = nil
+	end
+	publishPhase()
+	state.dirty = true
+	broadcast()
+	print("[Nodex] De volta ao lobby.")
+end
+
+local function park(player, record)
+	record.parked = true
+	record.slowUntil = 0
+	record.turboUntil = 0
+	local x, y, z, yaw = Course.finishHoldPose(record.colorIndex, record.slot)
+	teleport(player, x, y, z, yaw, true)
+	syncAttributes(player, record, 0)
+end
+
+local function closeRound(now, asDnf)
+	if state.phase ~= "race" and state.phase ~= "countdown" then
+		return
+	end
+	if asDnf then
+		for _, record in pairs(records) do
+			if record.inRound and not record.finished and not record.gone and not record.dnf then
+				record.dnf = true
+			end
+		end
+		setNotice("Tempo esgotado!")
+	end
+	local ordered = Rules.podium(resultRows())
+	for index, row in ipairs(ordered) do
+		local record = records[row.id]
+		if record then
+			record.place = index
+		end
+	end
+	if ordered[1] and ordered[1].finished then
+		local winner = records[ordered[1].id]
+		if winner then
+			local entry = ensureWin(winner)
+			entry.count += 1
+		end
+	end
+	state.phase = "podium"
+	state.podiumUntil = now + Rules.PODIUM_HOLD
+	for _, player in ipairs(Players:GetPlayers()) do
+		local record = records[player.UserId]
+		if record and record.inRound and not record.gone then
+			local rank = record.place or record.slot
+			local x, y, z, yaw = Course.podiumPose(rank, record.slot)
+			teleport(player, x, y, z, yaw, true)
+			syncAttributes(player, record, 0)
+			syncStats(player, record)
+		end
+	end
+	confetti()
+	publishPhase()
+	state.dirty = true
+	broadcast(now)
+	print("[Nodex] Pódio da rodada " .. tostring(state.roundId) .. ".")
+end
+
+local function roundStates()
+	local list = {}
+	for _, record in pairs(records) do
+		if record.inRound then
+			local name = "racing"
+			if record.gone then
+				name = "gone"
+			elseif record.finished then
+				name = "finished"
+			elseif record.dnf then
+				name = "dnf"
+			end
+			table.insert(list, name)
+		end
+	end
+	return list
+end
+
+local function considerRoundEnd(now)
+	if state.phase ~= "race" then
+		return
+	end
+	local status = Rules.roundStatus(now, state.firstFinishAt, roundStates())
+	if status == "dnf_rest" then
+		closeRound(now, true)
+	elseif status == "done" then
+		closeRound(now, false)
+	end
+end
+
+local function beginCountdown()
+	if state.phase ~= "lobby" then
+		return
+	end
+	local roster = Players:GetPlayers()
+	if #roster < 1 then
+		return
+	end
+	state.phase = "countdown"
+	state.roundId += 1
+	state.firstFinishAt = nil
+	state.countdownEnd = Workspace:GetServerTimeNow() + Rules.COUNTDOWN_SECONDS
+	state.notice = ""
+	state.noticeUntil = 0
+	for _, player in ipairs(roster) do
+		local record = records[player.UserId]
+		if record then
+			freshRoundFields(record)
+			record.inRound = true
+			record.spectating = false
+			record.ready = false
+			local x, y, z, yaw = Course.slotPose(record.slot)
+			record.x = x
+			record.allowedX = x + Rules.ALLOWANCE_AHEAD
+			teleport(player, x, y, z, yaw, true)
+			bindSpawn(player, record)
+			syncAttributes(player, record, 0)
+			syncStats(player, record)
+			paint(player, record)
+		end
+	end
+	publishPhase()
+	state.dirty = true
+	broadcast()
+	print("[Nodex] Contagem da rodada " .. tostring(state.roundId) .. ".")
+end
+
+local function startRace(now)
+	state.phase = "race"
+	state.raceStart = now
+	state.raceStartServer = Workspace:GetServerTimeNow()
+	state.countdownEnd = 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		local record = records[player.UserId]
+		if record and record.inRound then
+			local hrp, hum = humanoidOf(player)
+			local x = hrp and hrp.Position.X or select(1, Course.slotPose(record.slot))
+			record.allowedX = x + Rules.ALLOWANCE_AHEAD
+			record.x = x
+			syncAttributes(player, record, Rules.BASE_SPEED)
+			bindSpawn(player, record)
+			if hum then
+				hum.WalkSpeed = Rules.BASE_SPEED
+				hum.UseJumpPower = false
+				hum.JumpHeight = Rules.JUMP_HEIGHT
+			end
+			if hrp then
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.Anchored = false
+			end
+		end
+	end
+	publishPhase()
+	state.dirty = true
+	broadcast(now)
+	print("[Nodex] Valendo!")
+end
+
+local function feetOf(hrp, hum)
+	local feetY = hrp.Position.Y - Course.HIP
+	local lowGround = hum.FloorMaterial ~= Enum.Material.Air and hrp.Position.Y < Course.FLOOR_TOP + Course.HIP + 1.25
+	if lowGround then
+		feetY = math.min(feetY, Course.FLOOR_TOP + 0.15)
+	end
+	return feetY
+end
+
+local function rewindX(hrp, x)
+	local pos = hrp.Position
+	hrp.CFrame = CFrame.new(x, pos.Y, pos.Z) * hrp.CFrame.Rotation
+	local velocity = hrp.AssemblyLinearVelocity
+	hrp.AssemblyLinearVelocity = Vector3.new(0, velocity.Y, velocity.Z)
+end
+
+local function applySlow(record, now)
+	record.slowUntil = now + Rules.SLOW_TIME
+end
+
+local function stepRacer(player, record, now, step)
+	local hrp, hum = humanoidOf(player)
+	if not hrp or not hum then
+		return
+	end
+	if record.finished then
+		if not record.parked then
+			park(player, record)
+		end
+		record.x = hrp.Position.X
+		return
+	end
+
+	local speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
+	local px = hrp.Position.X
+	local py = hrp.Position.Y
+	local pz = hrp.Position.Z
+
+	record.allowedX += (speed + Rules.ALLOWANCE_SLACK) * step
+	if record.allowedX > px + Rules.ALLOWANCE_AHEAD then
+		record.allowedX = px + Rules.ALLOWANCE_AHEAD
+	end
+	if px > record.allowedX + Rules.REWIND_PAD then
+		rewindX(hrp, record.allowedX)
+		px = record.allowedX
+	end
+
+	if py < Course.FLOOR_TOP - 10 then
+		local x, y, z, yaw = Course.respawnPose(record.slot, record.checkpoint)
+		record.allowedX = x
+		record.x = x
+		teleport(player, x, y, z, yaw, false)
+		bindSpawn(player, record)
+		syncAttributes(player, record, speed)
+		return
+	end
+
+	if math.abs(pz) > Course.LANE_HALF + 2 then
+		local nz = math.clamp(pz, -Course.LANE_HALF + 1, Course.LANE_HALF - 1)
+		hrp.CFrame = CFrame.new(px, py, nz) * hrp.CFrame.Rotation
+		pz = nz
+	end
+
+	local feetY = feetOf(hrp, hum)
+	local hrpY = hrp.Position.Y
+	for _, box in ipairs(boxes) do
+		if not record.hit[box.id] then
+			local hit = false
+			if box.kind == "gear" and Course.penalizeGear(feetY, px, pz, box) then
+				hit = true
+				applySlow(record, now)
+			elseif box.kind == "oil" and Course.penalizeOil(feetY, px, pz, box, false) then
+				hit = true
+				applySlow(record, now)
+			elseif box.kind == "battery" and Course.collectBattery(hrpY, px, pz, box) then
+				hit = true
+				record.batteries += 1
+				record.turboUntil = now + Rules.TURBO_TIME
+				table.insert(record.collected, box.id)
+				state.dirty = true
+			end
+			if hit then
+				record.hit[box.id] = true
+				state.dirty = true
+			end
+		end
+	end
+
+	local cp = Course.clearedCheckpoint(px, record.checkpoint)
+	if cp then
+		record.checkpoint = cp.index
+		bindSpawn(player, record)
+		state.dirty = true
+	end
+
+	if Course.canFinish(px, record.checkpoint) then
+		record.finished = true
+		record.time = now - state.raceStart
+		record.x = px
+		if not state.firstFinishAt then
+			state.firstFinishAt = now
+		end
+		park(player, record)
+		syncStats(player, record)
+		state.dirty = true
+		setNotice(record.nick .. " chegou!")
+		return
+	end
+
+	speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
+	hum.WalkSpeed = speed
+	hum.JumpHeight = Rules.JUMP_HEIGHT
+	hum.UseJumpPower = false
+	record.x = hrp.Position.X
+	syncAttributes(player, record, speed)
+end
+
+local function containLobby(player, record)
+	local hrp, hum = humanoidOf(player)
+	if not hrp or not hum then
+		return
+	end
+	local px = hrp.Position.X
+	local py = hrp.Position.Y
+	local pz = hrp.Position.Z
+	local outside = px > Course.LOBBY_MAX_X + 2 or px < Course.LOBBY_MIN_X - 4 or math.abs(pz) > Course.LOBBY_HALF_Z + 4 or py < Course.FLOOR_TOP - 8
+	if outside then
+		local x, y, z, yaw = Course.lobbyPose(record.slot)
+		teleport(player, x, y, z, yaw, false)
+	end
+	if state.phase == "lobby" then
+		hum.WalkSpeed = Rules.LOBBY_SPEED
+		syncAttributes(player, record, Rules.LOBBY_SPEED)
+	end
+end
+
+local function onHeartbeat(dt)
+	local now = os.clock()
+	local step = math.clamp(dt, 0, 0.2)
+	if state.phase == "countdown" then
+		if Workspace:GetServerTimeNow() >= state.countdownEnd then
+			startRace(now)
+		end
+	elseif state.phase == "race" then
+		for _, player in ipairs(Players:GetPlayers()) do
+			local record = records[player.UserId]
+			if record and record.inRound and not record.gone then
+				stepRacer(player, record, now, step)
+			elseif record then
+				containLobby(player, record)
+			end
+		end
+		considerRoundEnd(now)
+	elseif state.phase == "podium" then
+		if now >= state.podiumUntil then
+			returnToLobby()
+			return
+		end
+	else
+		for _, player in ipairs(Players:GetPlayers()) do
+			local record = records[player.UserId]
+			if record then
+				containLobby(player, record)
+			end
+		end
+	end
+	pushAccum += dt
+	if state.dirty or pushAccum >= 0.2 then
+		pushAccum = 0
+		broadcast(now)
+	end
+end
+
+local function allReady()
+	local roster = Players:GetPlayers()
+	if #roster < 1 then
+		return false
+	end
+	for _, player in ipairs(roster) do
+		local record = records[player.UserId]
+		if not record or not record.ready then
+			return false
+		end
+	end
+	return true
+end
+
+local lastAction = {}
+
+local function onAction(player, payload)
+	if typeof(payload) ~= "table" then
+		return
+	end
+	local kind = payload.t
+	if type(kind) ~= "string" then
+		return
+	end
+	local now = os.clock()
+	if kind ~= "hello" and lastAction[player.UserId] and now - lastAction[player.UserId] < 0.12 then
+		return
+	end
+	lastAction[player.UserId] = now
+	local record = records[player.UserId]
+	if not record then
+		return
+	end
+	if kind == "hello" then
+		broadcast()
+		return
+	end
+	if kind == "ready" and state.phase == "lobby" then
+		if type(payload.v) ~= "boolean" then
+			return
+		end
+		record.ready = payload.v
+		syncAttributes(player, record, Rules.LOBBY_SPEED)
+		state.dirty = true
+		if allReady() then
+			beginCountdown()
+		else
+			broadcast()
+		end
+		return
+	end
+	if kind == "start" and state.phase == "lobby" then
+		if player.UserId ~= state.hostUserId then
+			return
+		end
+		beginCountdown()
+		return
+	end
+	if kind == "nick" and state.phase == "lobby" then
+		if not Config.isNick(payload.v) then
+			return
+		end
+		record.nick = payload.v
+		ensureWin(record)
+		paint(player, record)
+		syncAttributes(player, record, Rules.LOBBY_SPEED)
+		state.dirty = true
+		broadcast()
+		return
+	end
+	if kind == "return" and state.phase == "podium" then
+		returnToLobby()
+		return
+	end
+	if kind == "checkpoint_reset" and state.phase == "race" then
+		if not record.inRound or record.finished or record.gone or record.spectating then
+			return
+		end
+		if now - (record.lastReset or 0) < Rules.RESET_COOLDOWN then
+			return
+		end
+		record.lastReset = now
+		local x, y, z, yaw = Course.respawnPose(record.slot, record.checkpoint)
+		record.allowedX = x
+		record.x = x
+		teleport(player, x, y, z, yaw, false)
+		bindSpawn(player, record)
+		state.dirty = true
+		return
+	end
+end
+
+local function hookCharacter(player, char)
+	local record = records[player.UserId]
+	if not record then
+		return
+	end
+	local hum = char:WaitForChild("Humanoid", 5)
+	local hrp = char:WaitForChild("HumanoidRootPart", 5)
+	if not hum or not hrp or not player.Parent then
+		return
+	end
+	if diedConn[player] then
+		diedConn[player]:Disconnect()
+	end
+	diedConn[player] = hum.Died:Connect(function()
+		task.delay(0.6, function()
+			if player.Parent then
+				player:LoadCharacter()
+			end
+		end)
+	end)
+	paint(player, record)
+	if state.phase == "race" and record.inRound and not record.gone and not record.finished then
+		local x, y, z, yaw = Course.respawnPose(record.slot, record.checkpoint)
+		record.allowedX = x
+		record.x = x
+		teleport(player, x, y, z, yaw, false)
+	else
+		placeForPhase(player, record)
+	end
+	bindSpawn(player, record)
+	local speed = Rules.LOBBY_SPEED
+	if state.phase == "race" and record.inRound and not record.finished then
+		speed = Rules.currentSpeed(os.clock(), record.slowUntil or 0, record.turboUntil or 0)
+	elseif state.phase ~= "lobby" then
+		speed = 0
+	end
+	hum.WalkSpeed = speed
+	syncAttributes(player, record, speed)
+	syncStats(player, record)
+end
+
+local function onPlayer(player)
+	if records[player.UserId] then
+		return
+	end
+	local slot = lowestSlot()
+	if not slot then
+		player:Kick("A Fábrica comporta até 8 robôs.")
+		return
+	end
+	local record = {
+		userId = player.UserId,
+		slot = slot,
+		colorIndex = slot,
+		nick = Config.NICKS[slot],
+		ready = false,
+		spectating = state.phase ~= "lobby",
+		inRound = false,
+		finished = false,
+		dnf = false,
+		gone = false,
+		time = nil,
+		batteries = 0,
+		checkpoint = 0,
+		hit = {},
+		collected = {},
+		slowUntil = 0,
+		turboUntil = 0,
+		allowedX = 0,
+		x = 0,
+		lastReset = 0,
+		parked = false,
+	}
+	records[player.UserId] = record
+	table.insert(joinOrder, player.UserId)
+	ensureWin(record)
+	updateHost()
+	if charConn[player] then
+		charConn[player]:Disconnect()
+	end
+	charConn[player] = player.CharacterAdded:Connect(function(char)
+		hookCharacter(player, char)
+	end)
+	task.spawn(function()
+		if not player.Parent then
+			return
+		end
+		local current = player.Character
+		if current == nil or current:FindFirstChild("Antenna", true) == nil then
+			player:LoadCharacter()
+		elseif current then
+			hookCharacter(player, current)
+		end
+	end)
+	state.dirty = true
+	broadcast()
+end
+
+local function onLeave(player)
+	local record = records[player.UserId]
+	if charConn[player] then
+		charConn[player]:Disconnect()
+		charConn[player] = nil
+	end
+	if diedConn[player] then
+		diedConn[player]:Disconnect()
+		diedConn[player] = nil
+	end
+	lastAction[player.UserId] = nil
+	freeJoin(player.UserId)
+	if record then
+		if record.inRound and (state.phase == "race" or state.phase == "countdown") and not record.finished then
+			record.gone = true
+			record.spectating = false
+			if state.phase == "countdown" then
+				record.inRound = false
+			end
+			setNotice(record.nick .. " saiu")
+		elseif state.phase == "lobby" or state.phase == "podium" then
+			records[player.UserId] = nil
+		end
+	end
+	updateHost()
+	if state.phase == "countdown" then
+		local still = 0
+		for _, other in ipairs(Players:GetPlayers()) do
+			local otherRecord = records[other.UserId]
+			if otherRecord and otherRecord.inRound then
+				still += 1
+			end
+		end
+		if still < 1 then
+			returnToLobby()
+			return
+		end
+	end
+	if state.phase == "race" then
+		considerRoundEnd(os.clock())
+	end
+	state.dirty = true
+	broadcast()
+end
+
+function RaceService.start(spawnPads)
+	if started then
+		return
+	end
+	started = true
+	pads = spawnPads
+	boxes = Course.boxes()
+
+	local folder = ReplicatedStorage:FindFirstChild("NodexRemotes")
+	if folder then
+		folder:Destroy()
+	end
+	folder = Instance.new("Folder")
+	folder.Name = "NodexRemotes"
+	folder.Parent = ReplicatedStorage
+	local action = Instance.new("RemoteEvent")
+	action.Name = "Action"
+	action.Parent = folder
+	local stateRemote = Instance.new("RemoteEvent")
+	stateRemote.Name = "State"
+	stateRemote.Parent = folder
+	remotes = { Action = action, State = stateRemote }
+
+	action.OnServerEvent:Connect(onAction)
+	Players.PlayerAdded:Connect(onPlayer)
+	Players.PlayerRemoving:Connect(onLeave)
+	RunService.Heartbeat:Connect(onHeartbeat)
+	for _, player in ipairs(Players:GetPlayers()) do
+		onPlayer(player)
+	end
+	publishPhase()
+	print(string.format(
+		"[Nodex] Robô Corredor — Fábrica pronta. Chegada em %d studs, %d postos. Até %d robôs; treino solo permitido.",
+		Course.FINISH_X,
+		Course.checkpointCount(),
+		Rules.MAX_PLAYERS
+	))
+end
+
+return RaceService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">RobotFactory</string>
+          <string name="Source"><![CDATA[-- Robô de blocos com Humanoid R6. Sem mesh, sem decal e sem animação da plataforma.
+-- O rosto olha para a câmera lateral (+Z) enquanto o corpo corre para +X.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterPlayer = game:GetService("StarterPlayer")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Course = require(Shared:WaitForChild("Course"))
+local Rules = require(Shared:WaitForChild("Rules"))
+
+local RobotFactory = {}
+
+local HIP = 3
+
+local function part(props): Part
+	local p = Instance.new("Part")
+	p.Name = props.name
+	p.Size = props.size
+	p.CFrame = props.cframe
+	p.Color = props.color
+	p.Material = props.material or Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = props.shadow ~= false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props.shape then
+		p.Shape = props.shape
+	end
+	if props.role then
+		p:SetAttribute("Role", props.role)
+	end
+	p.Parent = props.parent
+	return p
+end
+
+local function joint(name: string, part0: BasePart, part1: BasePart)
+	local motor = Instance.new("Motor6D")
+	motor.Name = name
+	motor.Part0 = part0
+	motor.Part1 = part1
+	motor.C0 = part0.CFrame:ToObjectSpace(part1.CFrame)
+	motor.C1 = CFrame.new()
+	motor.Parent = part0
+	return motor
+end
+
+local function weld(a: BasePart, b: BasePart)
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = a
+	w.Part1 = b
+	w.Parent = a
+end
+
+function RobotFactory.install()
+	if Course.HIP ~= HIP then
+		error("[Nodex] O rig do robô foi medido para HipHeight 3.")
+	end
+
+	local existing = StarterPlayer:FindFirstChild("StarterCharacter")
+	if existing then
+		existing:Destroy()
+	end
+
+	local model = Instance.new("Model")
+	model.Name = "StarterCharacter"
+
+	local azul = Color3.fromRGB(76, 201, 240)
+	local white = Color3.fromRGB(255, 255, 255)
+	local ink = Color3.fromRGB(20, 24, 36)
+	local yellow = Color3.fromRGB(255, 214, 70)
+	local dark = Color3.fromRGB(40, 48, 58)
+
+	local hrp = part({
+		name = "HumanoidRootPart",
+		size = Vector3.new(2, 2, 1),
+		cframe = CFrame.new(0, HIP, 0),
+		color = azul,
+		parent = model,
+		shadow = false,
+	})
+	hrp.Transparency = 1
+	hrp.RootPriority = 1
+
+	local torso = part({
+		name = "Torso",
+		size = Vector3.new(2.2, 2, 1.2),
+		cframe = CFrame.new(0, HIP, 0),
+		color = azul,
+		parent = model,
+		role = "body",
+	})
+	local head = part({
+		name = "Head",
+		size = Vector3.new(1.8, 1.5, 1.8),
+		cframe = CFrame.new(0, 4.75, 0),
+		color = azul,
+		parent = model,
+		role = "body",
+	})
+	local leftArm = part({
+		name = "Left Arm",
+		size = Vector3.new(0.9, 2, 0.9),
+		cframe = CFrame.new(-1.6, HIP, 0),
+		color = azul,
+		parent = model,
+		role = "body",
+	})
+	local rightArm = part({
+		name = "Right Arm",
+		size = Vector3.new(0.9, 2, 0.9),
+		cframe = CFrame.new(1.6, HIP, 0),
+		color = azul,
+		parent = model,
+		role = "body",
+	})
+	local leftLeg = part({
+		name = "Left Leg",
+		size = Vector3.new(0.95, 2, 1),
+		cframe = CFrame.new(-0.55, 1, 0),
+		color = azul,
+		parent = model,
+		role = "body",
+	})
+	local rightLeg = part({
+		name = "Right Leg",
+		size = Vector3.new(0.95, 2, 1),
+		cframe = CFrame.new(0.55, 1, 0),
+		color = azul,
+		parent = model,
+		role = "body",
+	})
+
+	local function face(name: string, size: Vector3, cf: CFrame, color: Color3, role: string)
+		return part({
+			name = name,
+			size = size,
+			cframe = cf,
+			color = color,
+			parent = model,
+			role = role,
+			shadow = false,
+		})
+	end
+
+	local eyeL = face("EyeL", Vector3.new(0.32, 0.36, 0.16), CFrame.new(-0.38, 4.9, 0.98), white, "eye")
+	local eyeR = face("EyeR", Vector3.new(0.32, 0.36, 0.16), CFrame.new(0.38, 4.9, 0.98), white, "eye")
+	local pupilL = face("PupilL", Vector3.new(0.16, 0.18, 0.1), CFrame.new(-0.38, 4.86, 1.08), ink, "pupil")
+	local pupilR = face("PupilR", Vector3.new(0.16, 0.18, 0.1), CFrame.new(0.38, 4.86, 1.08), ink, "pupil")
+	local smile = face("Smile", Vector3.new(0.78, 0.14, 0.1), CFrame.new(0, 4.42, 1.04), ink, "smile")
+	local pole = face("Antenna", Vector3.new(0.16, 0.7, 0.16), CFrame.new(0, 5.85, 0), dark, "antenna")
+	local ball = face("AntennaBall", Vector3.new(0.5, 0.5, 0.5), CFrame.new(0, 6.42, 0), yellow, "antennaBall")
+	ball.Shape = Enum.PartType.Ball
+
+	for _, extra in ipairs({ eyeL, eyeR, pupilL, pupilR, smile, pole, ball }) do
+		extra.Massless = true
+		weld(head, extra)
+	end
+
+	joint("RootJoint", hrp, torso)
+	joint("Neck", torso, head)
+	joint("Left Shoulder", torso, leftArm)
+	joint("Right Shoulder", torso, rightArm)
+	joint("Left Hip", torso, leftLeg)
+	joint("Right Hip", torso, rightLeg)
+
+	for _, child in ipairs(model:GetChildren()) do
+		if child:IsA("BasePart") then
+			child.Anchored = false
+		end
+	end
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.Name = "Humanoid"
+	humanoid.RigType = Enum.HumanoidRigType.R6
+	humanoid.HipHeight = Course.HIP
+	humanoid.UseJumpPower = false
+	humanoid.JumpHeight = Rules.JUMP_HEIGHT
+	humanoid.WalkSpeed = 0
+	humanoid.MaxHealth = 100
+	humanoid.Health = 100
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.RequiresNeck = false
+	humanoid.BreakJointsOnDeath = true
+	humanoid.MaxSlopeAngle = 40
+	humanoid.AutomaticScalingEnabled = false
+	pcall(function()
+		humanoid.AutoJumpEnabled = false
+	end)
+	for _, stateName in ipairs({ "FallingDown", "Ragdoll", "Climbing", "Swimming" }) do
+		local state = (Enum.HumanoidStateType :: any)[stateName]
+		if state then
+			humanoid:SetStateEnabled(state, false)
+		end
+	end
+	humanoid.Parent = model
+
+	-- LocalScript vazio com o nome Animate: o motor não injeta o Animate padrão
+	-- (aquele puxaria animações por asset id). O balanço das pernas fica no cliente.
+	local animate = Instance.new("LocalScript")
+	animate.Name = "Animate"
+	animate.Parent = model
+
+	model.PrimaryPart = hrp
+	model.Parent = StarterPlayer
+
+	pcall(function()
+		(StarterPlayer :: any).AutoJumpEnabled = false
+	end)
+end
+
+return RobotFactory
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="13">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="14">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">Hud</string>
+          <string name="Source"><![CDATA[-- Interface em português, com botões grandes para toque e teclado.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Rules = require(Shared:WaitForChild("Rules"))
+
+local Hud = {}
+
+local function paint(c)
+	return Config.toColor3(c)
+end
+
+local function corner(parent, radius)
+	local ui = Instance.new("UICorner")
+	ui.CornerRadius = UDim.new(0, radius)
+	ui.Parent = parent
+	return ui
+end
+
+local function label(parent, props)
+	local text = Instance.new("TextLabel")
+	text.BackgroundTransparency = 1
+	text.Font = props.font or Enum.Font.GothamBold
+	text.TextSize = props.size or 18
+	text.TextColor3 = props.color or paint(Config.NAVY)
+	text.TextXAlignment = props.align or Enum.TextXAlignment.Center
+	text.TextYAlignment = Enum.TextYAlignment.Center
+	text.TextWrapped = true
+	text.Text = props.text or ""
+	text.Size = props.sizeU or UDim2.fromScale(1, 0)
+	text.AutomaticSize = props.auto or Enum.AutomaticSize.Y
+	text.LayoutOrder = props.order or 0
+	text.Parent = parent
+	return text
+end
+
+local function button(parent, text, col, order)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, 0, 0, 52)
+	b.BackgroundColor3 = col
+	b.Text = text
+	b.TextSize = 22
+	b.Font = Enum.Font.GothamBold
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.AutoButtonColor = true
+	b.LayoutOrder = order or 0
+	b.Parent = parent
+	corner(b, 16)
+	return b
+end
+
+local function holdButton(parent, text, size, position, anchor)
+	local b = Instance.new("TextButton")
+	b.Size = size
+	b.Position = position
+	b.AnchorPoint = anchor
+	b.BackgroundColor3 = paint(Config.NAVY)
+	b.BackgroundTransparency = 0.12
+	b.Text = text
+	b.TextSize = 28
+	b.Font = Enum.Font.GothamBold
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.ZIndex = 20
+	b.Parent = parent
+	corner(b, 18)
+	return b
+end
+
+local function bindHold(buttonObj, holds, key)
+	local function down(input)
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
+			holds[key] = true
+		end
+	end
+	local function up(input)
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
+			holds[key] = false
+		end
+	end
+	buttonObj.InputBegan:Connect(down)
+	buttonObj.InputEnded:Connect(up)
+end
+
+function Hud.mount(playerGui, fire)
+	local holds = {
+		forward = false,
+		back = false,
+		up = false,
+		down = false,
+		jump = false,
+	}
+	local last = nil
+	local shownNotice = ""
+	local noticeAt = 0
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "NodexHud"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	pcall(function()
+		gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	end)
+	gui.Parent = playerGui
+
+	local top = Instance.new("Frame")
+	top.Name = "Top"
+	top.Size = UDim2.new(1, -16, 0, 96)
+	top.Position = UDim2.fromOffset(8, 8)
+	top.BackgroundColor3 = Color3.new(1, 1, 1)
+	top.BackgroundTransparency = 0.12
+	top.Visible = false
+	top.Parent = gui
+	corner(top, 18)
+
+	local batteryText = label(top, { text = "🔋 0", size = 22, align = Enum.TextXAlignment.Left })
+	batteryText.AutomaticSize = Enum.AutomaticSize.None
+	batteryText.Position = UDim2.fromOffset(14, 8)
+	batteryText.Size = UDim2.fromOffset(120, 28)
+
+	local placeText = label(top, { text = "1º lugar", size = 22, color = paint(Config.TITLE_ORANGE) })
+	placeText.AutomaticSize = Enum.AutomaticSize.None
+	placeText.Position = UDim2.new(0.5, -80, 0, 8)
+	placeText.Size = UDim2.fromOffset(160, 28)
+
+	local timeText = label(top, { text = "0:00.00", size = 20, align = Enum.TextXAlignment.Right })
+	timeText.AutomaticSize = Enum.AutomaticSize.None
+	timeText.Position = UDim2.new(1, -150, 0, 8)
+	timeText.Size = UDim2.fromOffset(136, 28)
+
+	local barBack = Instance.new("Frame")
+	barBack.Position = UDim2.fromOffset(14, 44)
+	barBack.Size = UDim2.new(1, -28, 0, 14)
+	barBack.BackgroundColor3 = Color3.fromRGB(230, 234, 238)
+	barBack.Parent = top
+	corner(barBack, 8)
+	local barFill = Instance.new("Frame")
+	barFill.Size = UDim2.fromScale(0, 1)
+	barFill.BackgroundColor3 = paint(Config.BAR)
+	barFill.Parent = barBack
+	corner(barFill, 8)
+
+	local effectText = label(top, { text = "", size = 16, color = paint(Config.NAVY) })
+	effectText.AutomaticSize = Enum.AutomaticSize.None
+	effectText.Position = UDim2.fromOffset(14, 64)
+	effectText.Size = UDim2.new(1, -28, 0, 24)
+
+	local resetBtn = Instance.new("TextButton")
+	resetBtn.AnchorPoint = Vector2.new(0.5, 1)
+	resetBtn.Size = UDim2.fromOffset(180, 40)
+	resetBtn.Position = UDim2.new(0.5, 0, 1, -168)
+	resetBtn.BackgroundColor3 = paint(Config.ORANGE)
+	resetBtn.Text = "Voltar ao posto"
+	resetBtn.TextSize = 14
+	resetBtn.Font = Enum.Font.GothamBold
+	resetBtn.TextColor3 = Color3.new(1, 1, 1)
+	resetBtn.Visible = false
+	resetBtn.ZIndex = 20
+	resetBtn.Parent = gui
+	corner(resetBtn, 12)
+	resetBtn.MouseButton1Click:Connect(function()
+		fire({ t = "checkpoint_reset" })
+	end)
+
+	local notice = label(gui, { text = "", size = 20, color = paint(Config.NAVY) })
+	notice.AutomaticSize = Enum.AutomaticSize.None
+	notice.BackgroundColor3 = Color3.new(1, 1, 1)
+	notice.BackgroundTransparency = 0.1
+	notice.Position = UDim2.new(0.5, -160, 0, 146)
+	notice.Size = UDim2.fromOffset(320, 36)
+	notice.Visible = false
+	corner(notice, 12)
+
+	local countdown = Instance.new("TextLabel")
+	countdown.BackgroundTransparency = 1
+	countdown.AnchorPoint = Vector2.new(0.5, 0.5)
+	countdown.Position = UDim2.fromScale(0.5, 0.38)
+	countdown.Size = UDim2.fromOffset(280, 140)
+	countdown.Font = Enum.Font.GothamBold
+	countdown.TextScaled = true
+	countdown.TextColor3 = paint(Config.TITLE_ORANGE)
+	countdown.TextStrokeTransparency = 0.4
+	countdown.TextStrokeColor3 = Color3.new(1, 1, 1)
+	countdown.Text = ""
+	countdown.Visible = false
+	countdown.ZIndex = 15
+	countdown.Parent = gui
+
+	local hint = label(gui, { text = "", size = 16 })
+	hint.AutomaticSize = Enum.AutomaticSize.None
+	hint.AnchorPoint = Vector2.new(0.5, 0)
+	hint.Position = UDim2.new(0.5, 0, 0, 108)
+	hint.Size = UDim2.new(1, -24, 0, 32)
+	hint.TextColor3 = paint(Config.NAVY)
+	hint.BackgroundColor3 = Color3.new(1, 1, 1)
+	hint.BackgroundTransparency = 0.2
+	corner(hint, 12)
+
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "Card"
+	scroll.AnchorPoint = Vector2.new(0.5, 0)
+	scroll.Position = UDim2.new(0.5, 0, 0, 8)
+	scroll.Size = UDim2.new(0.94, 0, 1, -150)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 8
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.CanvasSize = UDim2.new()
+	scroll.Visible = false
+	scroll.Parent = gui
+
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(1, 0, 0, 0)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = Color3.new(1, 1, 1)
+	card.Parent = scroll
+	corner(card, 22)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 16)
+	pad.PaddingBottom = UDim.new(0, 16)
+	pad.PaddingLeft = UDim.new(0, 14)
+	pad.PaddingRight = UDim.new(0, 14)
+	pad.Parent = card
+	local list = Instance.new("UIListLayout")
+	list.Padding = UDim.new(0, 8)
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Parent = card
+
+	local title = label(card, { text = Config.TITLE, size = 28, color = paint(Config.TITLE_ORANGE), order = 1 })
+	local world = label(card, { text = "🏭 " .. Config.WORLD, size = 20, order = 2 })
+	local tip = label(card, {
+		text = Config.TIP_TOUCH .. "\n" .. Config.TIP_JUMP .. "\n" .. Config.TIP_BATTERY .. "\nNo lobby: WASD ou setas, Espaço pula. ◀▶ andam, ▲▼ desviam.",
+		size = 16,
+		font = Enum.Font.Gotham,
+		order = 3,
+	})
+	local countText = label(card, { text = "", size = 16, order = 4 })
+	local winsText = label(card, { text = "", size = 15, font = Enum.Font.Gotham, order = 5 })
+
+	local chips = Instance.new("Frame")
+	chips.BackgroundTransparency = 1
+	chips.Size = UDim2.new(1, 0, 0, 0)
+	chips.AutomaticSize = Enum.AutomaticSize.Y
+	chips.LayoutOrder = 6
+	chips.Parent = card
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(112, 36)
+	grid.CellPadding = UDim2.fromOffset(6, 6)
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = chips
+	local chipButtons = {}
+	for index, nick in ipairs(Config.NICKS) do
+		local chip = Instance.new("TextButton")
+		chip.BackgroundColor3 = Color3.fromRGB(233, 236, 239)
+		chip.Text = nick
+		chip.TextSize = 16
+		chip.Font = Enum.Font.GothamBold
+		chip.TextColor3 = paint(Config.NAVY)
+		chip.LayoutOrder = index
+		chip.Parent = chips
+		corner(chip, 10)
+		chip.MouseButton1Click:Connect(function()
+			fire({ t = "nick", v = nick })
+		end)
+		chipButtons[nick] = chip
+	end
+
+	local rows = Instance.new("Frame")
+	rows.Name = "Rows"
+	rows.BackgroundTransparency = 1
+	rows.Size = UDim2.new(1, 0, 0, 0)
+	rows.AutomaticSize = Enum.AutomaticSize.Y
+	rows.LayoutOrder = 7
+	rows.Parent = card
+	local rowLayout = Instance.new("UIListLayout")
+	rowLayout.Padding = UDim.new(0, 4)
+	rowLayout.Parent = rows
+
+	local readyBtn = button(card, "Pronto", paint(Config.TEAL), 8)
+	local startBtn = button(card, "Começar", paint(Config.ORANGE), 9)
+	local returnBtn = button(card, "Nova corrida", paint(Config.ORANGE), 10)
+	local waitText = label(card, { text = "", size = 16, font = Enum.Font.Gotham, order = 11 })
+
+	readyBtn.MouseButton1Click:Connect(function()
+		local ready = not (last and last.you and last.you.ready)
+		fire({ t = "ready", v = ready })
+	end)
+	startBtn.MouseButton1Click:Connect(function()
+		fire({ t = "start" })
+	end)
+	returnBtn.MouseButton1Click:Connect(function()
+		fire({ t = "return" })
+	end)
+
+	local function touchPad(text, xScale, yScale, key)
+		local b = holdButton(gui, text, UDim2.fromOffset(76, 64), UDim2.new(xScale, 0, yScale, 0), Vector2.new(0, 1))
+		bindHold(b, holds, key)
+		return b
+	end
+	-- 2x2 no canto esquerdo: não cobre o botão Pular da direita.
+	local upBtn = touchPad("▲", 0, 1, "up")
+	upBtn.Position = UDim2.new(0, 12, 1, -88)
+	local downBtn = touchPad("▼", 0, 1, "down")
+	downBtn.Position = UDim2.new(0, 12, 1, -16)
+	local backBtn = touchPad("◀", 0, 1, "back")
+	backBtn.Position = UDim2.new(0, 96, 1, -88)
+	local forwardBtn = touchPad("▶", 0, 1, "forward")
+	forwardBtn.Position = UDim2.new(0, 96, 1, -16)
+	local jumpBtn = holdButton(gui, "Pular", UDim2.fromOffset(104, 104), UDim2.new(1, -16, 1, -16), Vector2.new(1, 1))
+	jumpBtn.BackgroundColor3 = paint(Config.ORANGE)
+	jumpBtn.TextSize = 24
+	bindHold(jumpBtn, holds, "jump")
+
+	local function clearRows()
+		for _, child in ipairs(rows:GetChildren()) do
+			if child:IsA("TextLabel") then
+				child:Destroy()
+			end
+		end
+	end
+
+	local function addRow(text)
+		local row = label(rows, { text = text, size = 16, align = Enum.TextXAlignment.Left, font = Enum.Font.Gotham })
+		row.AutomaticSize = Enum.AutomaticSize.None
+		row.Size = UDim2.new(1, 0, 0, 24)
+	end
+
+	local function render(snapshot)
+		last = snapshot
+		local phase = snapshot and snapshot.phase or "lobby"
+		local you = snapshot and snapshot.you or nil
+		local spectating = you and you.spectating or false
+		local racing = phase == "race" or phase == "countdown"
+		top.Visible = racing
+		scroll.Visible = phase == "lobby" or phase == "podium" or spectating
+		resetBtn.Visible = phase == "race" and you ~= nil and you.inRound and not you.finished and not you.spectating
+		local showBelt = phase == "lobby"
+		local showMove = phase == "lobby" or (phase == "race" and you and you.inRound and not you.finished and not you.spectating)
+		backBtn.Visible = showBelt
+		forwardBtn.Visible = showBelt
+		upBtn.Visible = showMove
+		downBtn.Visible = showMove
+		jumpBtn.Visible = showMove == true
+
+		if phase == "race" and not spectating then
+			hint.Text = "A corrida anda sozinha. Espaço ou Pular. W/S ou ▲▼ desviam."
+			hint.Visible = true
+		elseif phase == "countdown" and not spectating then
+			hint.Text = Config.TIP_JUMP
+			hint.Visible = true
+		else
+			hint.Text = ""
+			hint.Visible = false
+		end
+
+		if you and racing then
+			batteryText.Text = "🔋 " .. tostring(you.batteries or 0)
+			local place = you.place or 1
+			placeText.Text = Rules.ordinal(place) .. " lugar"
+			local elapsed = 0
+			if you.finished and you.time then
+				elapsed = you.time
+			elseif snapshot.raceStartServer and snapshot.raceStartServer > 0 and phase == "race" then
+				elapsed = math.max(0, Workspace:GetServerTimeNow() - snapshot.raceStartServer)
+			end
+			timeText.Text = Rules.formatTime(elapsed)
+			local span = math.max(1, (snapshot.finishX or 1) - (snapshot.startX or 0))
+			local hrp = nil
+			local char = game:GetService("Players").LocalPlayer.Character
+			if char then
+				hrp = char:FindFirstChild("HumanoidRootPart")
+			end
+			local x = hrp and hrp.Position.X or you.x or 0
+			local alpha = math.clamp((x - (snapshot.startX or 0)) / span, 0, 1)
+			if you.finished then
+				alpha = 1
+			end
+			barFill.Size = UDim2.fromScale(alpha, 1)
+			local bits = {}
+			if (you.turboLeft or 0) > 0 then
+				table.insert(bits, string.format("TURBO %.1fs", you.turboLeft))
+			end
+			if (you.slowLeft or 0) > 0 then
+				table.insert(bits, string.format("DEVAGAR %.1fs", you.slowLeft))
+			end
+			effectText.Text = #bits > 0 and table.concat(bits, "  ·  ") or Config.TIP_BATTERY
+		end
+
+		local countdownText = ""
+		if phase == "countdown" and snapshot.countdownEnd and snapshot.countdownEnd > 0 then
+			local left = snapshot.countdownEnd - Workspace:GetServerTimeNow()
+			if left <= 0 then
+				countdownText = "Já!"
+			else
+				countdownText = tostring(math.max(1, math.ceil(left)))
+			end
+		elseif phase == "race" and snapshot.raceStartServer and snapshot.raceStartServer > 0 then
+			local elapsed = Workspace:GetServerTimeNow() - snapshot.raceStartServer
+			if elapsed >= 0 and elapsed < 0.75 then
+				countdownText = "Já!"
+			end
+		end
+		countdown.Text = countdownText
+		countdown.Visible = countdownText ~= ""
+
+		if snapshot and snapshot.notice and snapshot.notice ~= "" and snapshot.notice ~= shownNotice then
+			shownNotice = snapshot.notice
+			noticeAt = os.clock()
+		end
+		if shownNotice ~= "" and os.clock() - noticeAt < 4 then
+			notice.Text = shownNotice
+			notice.Visible = true
+		else
+			notice.Visible = false
+		end
+
+		local nick = you and you.nick or ""
+		for name, chip in pairs(chipButtons) do
+			local on = name == nick
+			chip.BackgroundColor3 = on and paint(Config.ORANGE) or Color3.fromRGB(233, 236, 239)
+			chip.TextColor3 = on and Color3.new(1, 1, 1) or paint(Config.NAVY)
+			chip.Visible = phase == "lobby"
+		end
+		chips.Visible = phase == "lobby"
+
+		local total = snapshot and #snapshot.players or 0
+		local cap = snapshot and snapshot.maxPlayers or Rules.MAX_PLAYERS
+		if phase == "lobby" then
+			local solo = total <= 1
+			countText.Text = string.format("Robôs na sala: %d/%d%s", total, cap, solo and "  ·  treino solo" or "")
+			title.Text = Config.TITLE
+			world.Text = "🏭 " .. Config.WORLD
+			tip.Visible = true
+		elseif spectating then
+			countText.Text = "Corrida em andamento. Você entra na próxima."
+			title.Text = Config.TITLE
+			tip.Visible = false
+		elseif phase == "podium" then
+			countText.Text = "Pódio da " .. Config.WORLD
+			title.Text = "Pódio"
+			world.Text = "🏭 " .. Config.WORLD
+			tip.Visible = false
+		end
+
+		local winBits = {}
+		if snapshot and snapshot.wins then
+			for _, entry in ipairs(snapshot.wins) do
+				table.insert(winBits, entry.nick .. " " .. tostring(entry.count))
+			end
+		end
+		winsText.Text = #winBits > 0 and ("Vitórias nesta sessão: " .. table.concat(winBits, " · ")) or "Vitórias nesta sessão: ainda nenhuma"
+
+		clearRows()
+		if phase == "podium" and snapshot and snapshot.results then
+			for index, row in ipairs(snapshot.results) do
+				local tint = Config.COLORS[row.colorIndex]
+				local who = row.nick .. (tint and (" · " .. tint.name) or "")
+				if row.finished then
+					addRow(Rules.ordinal(index) .. "  " .. who .. "  " .. Rules.formatTime(row.time) .. "  🔋 " .. tostring(row.batteries or 0))
+				elseif row.dnf then
+					addRow("DNF  " .. who .. "  tempo esgotado")
+				else
+					addRow("—  " .. who .. "  saiu")
+				end
+			end
+		elseif snapshot and snapshot.players and (phase == "lobby" or spectating) then
+			for _, row in ipairs(snapshot.players) do
+				local tint = Config.COLORS[row.colorIndex]
+				local bits = { row.nick }
+				if tint then
+					table.insert(bits, tint.name)
+				end
+				if you and row.userId == you.userId then
+					table.insert(bits, "você")
+				end
+				if snapshot.hostUserId == row.userId then
+					table.insert(bits, "anfitrião")
+				end
+				if row.ready then
+					table.insert(bits, "pronto")
+				end
+				addRow("● " .. table.concat(bits, " · "))
+			end
+		end
+
+		local isHost = you and you.isHost or false
+		readyBtn.Visible = phase == "lobby"
+		readyBtn.Text = (you and you.ready) and "Pronto ✓" or "Pronto"
+		startBtn.Visible = phase == "lobby" and isHost
+		startBtn.Text = total <= 1 and "Começar treino" or "Começar"
+		returnBtn.Visible = phase == "podium"
+		if phase == "lobby" and not isHost then
+			waitText.Text = "O anfitrião pode começar, ou todos apertam Pronto."
+		elseif phase == "podium" then
+			waitText.Text = "A sala volta ao lobby sozinha. Ou toque em Nova corrida."
+		elseif spectating then
+			waitText.Text = "Espere esta corrida acabar."
+		else
+			waitText.Text = ""
+		end
+	end
+
+	return {
+		render = render,
+		holds = function()
+			return holds
+		end,
+		releaseTouch = function()
+			holds.forward = false
+			holds.back = false
+			holds.up = false
+			holds.down = false
+			holds.jump = false
+		end,
+	}
+end
+
+return Hud
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="LocalScript" referent="16">
+        <Properties>
+          <string name="Name">Main</string>
+          <string name="Source"><![CDATA[-- Câmera lateral, corrida automática e pedidos ao servidor.
+-- O servidor continua dono de bateria, óleo, engrenagem, posto e chegada.
+
+local CollectionService = game:GetService("CollectionService")
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Rules = require(Shared:WaitForChild("Rules"))
+local Hud = require(script.Parent:WaitForChild("Hud"))
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local remotes = ReplicatedStorage:WaitForChild("NodexRemotes", 30)
+local action = remotes:WaitForChild("Action")
+local stateRemote = remotes:WaitForChild("State")
+
+local keys = {
+	w = false,
+	a = false,
+	s = false,
+	d = false,
+	space = false,
+}
+local latest = nil
+
+local function fire(payload)
+	action:FireServer(payload)
+end
+
+local hud = Hud.mount(player:WaitForChild("PlayerGui"), fire)
+
+local function setKey(code, down)
+	if code == Enum.KeyCode.W or code == Enum.KeyCode.Up then
+		keys.w = down
+	elseif code == Enum.KeyCode.S or code == Enum.KeyCode.Down then
+		keys.s = down
+	elseif code == Enum.KeyCode.A or code == Enum.KeyCode.Left then
+		keys.a = down
+	elseif code == Enum.KeyCode.D or code == Enum.KeyCode.Right then
+		keys.d = down
+	elseif code == Enum.KeyCode.Space then
+		keys.space = down
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		setKey(input.KeyCode, true)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		setKey(input.KeyCode, false)
+	end
+end)
+
+ContextActionService:BindActionAtPriority("NodexSinkMove", function()
+	return Enum.ContextActionResult.Sink
+end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Up, Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right, Enum.KeyCode.Space)
+
+task.spawn(function()
+	local scripts = player:WaitForChild("PlayerScripts", 15)
+	if not scripts then
+		return
+	end
+	local moduleScript = scripts:WaitForChild("PlayerModule", 15)
+	if not moduleScript then
+		return
+	end
+	local ok, controls = pcall(function()
+		return require(moduleScript):GetControls()
+	end)
+	if ok and controls then
+		controls:Disable()
+	end
+end)
+
+local function applyCollected(ids)
+	local set = {}
+	if ids then
+		for _, id in ipairs(ids) do
+			set[id] = true
+		end
+	end
+	for _, inst in ipairs(CollectionService:GetTagged(Config.TAG_PICKUP)) do
+		if inst:IsA("BasePart") then
+			local hide = set[inst:GetAttribute("ObstacleId")] == true
+			inst.LocalTransparencyModifier = hide and 1 or 0
+		end
+	end
+end
+
+local function animateCourse(dt)
+	local t = os.clock()
+	for _, tooth in ipairs(CollectionService:GetTagged(Config.TAG_TOOTH)) do
+		if tooth:IsA("BasePart") then
+			local phase = tooth:GetAttribute("SpinPhase") or 0
+			local cx = tooth:GetAttribute("SpinCX") or tooth.Position.X
+			local cy = tooth:GetAttribute("SpinCY") or tooth.Position.Y
+			local radius = tooth:GetAttribute("SpinRadius") or 2
+			local angle = t * 1.7 + phase
+			tooth.CFrame = CFrame.new(cx + math.cos(angle) * radius, cy + math.sin(angle) * radius, tooth.Position.Z) * CFrame.Angles(0, 0, angle)
+		end
+	end
+	local shift = (t * 5) % 8
+	for _, chevron in ipairs(CollectionService:GetTagged(Config.TAG_CHEVRON)) do
+		if chevron:IsA("BasePart") then
+			local home = chevron:GetAttribute("Home")
+			if typeof(home) == "CFrame" then
+				chevron.CFrame = home + Vector3.new(shift, 0, 0)
+			end
+		end
+	end
+	for _, bob in ipairs(CollectionService:GetTagged(Config.TAG_BOB)) do
+		if bob:IsA("BasePart") and bob.LocalTransparencyModifier < 1 then
+			local home = bob:GetAttribute("Home")
+			if typeof(home) == "CFrame" then
+				local wave = math.sin(t * 3 + home.Position.X * 0.2) * 0.25
+				bob.CFrame = home + Vector3.new(0, wave, 0)
+			end
+		end
+	end
+	for _, other in ipairs(Players:GetPlayers()) do
+		local char = other.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if char and hum and hum.Health > 0 then
+			local lhip = char:FindFirstChild("Left Hip", true)
+			local rhip = char:FindFirstChild("Right Hip", true)
+			local lshould = char:FindFirstChild("Left Shoulder", true)
+			local rshould = char:FindFirstChild("Right Shoulder", true)
+			if lhip and rhip and lhip:IsA("Motor6D") and rhip:IsA("Motor6D") then
+				local moving = hum.MoveDirection.Magnitude > 0.1 and hum.WalkSpeed > 0.5
+				local airborne = hum.FloorMaterial == Enum.Material.Air
+				local angle = 0
+				if moving and not airborne then
+					angle = math.sin(t * 9 + other.UserId) * 0.65
+				elseif airborne then
+					angle = -0.4
+				end
+				lhip.Transform = CFrame.Angles(0, 0, angle)
+				rhip.Transform = CFrame.Angles(0, 0, -angle)
+				if lshould and rshould and lshould:IsA("Motor6D") and rshould:IsA("Motor6D") then
+					lshould.Transform = CFrame.Angles(0, 0, -angle * 0.5)
+					rshould.Transform = CFrame.Angles(0, 0, angle * 0.5)
+				end
+			end
+		end
+	end
+	return dt
+end
+
+local function drive(_dt)
+	animateCourse(_dt)
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if camera then
+		camera.CameraType = Enum.CameraType.Scriptable
+		camera.FieldOfView = 68
+		if hrp then
+			local look = hrp.Position + Vector3.new(12, 1.2, 0)
+			local camPos = Vector3.new(hrp.Position.X - 4, hrp.Position.Y + 6.2, 32)
+			camera.CFrame = CFrame.lookAt(camPos, look)
+		end
+	end
+	if not hum or not hrp or hum.Health <= 0 or hrp.Anchored then
+		return
+	end
+	local phase = ReplicatedStorage:GetAttribute("Phase")
+	if phase == "countdown" or phase == "podium" then
+		return
+	end
+	local holds = hud.holds()
+	local jump = keys.space or holds.jump
+	local axisX, axisZ = 0, 0
+	if keys.d or holds.forward then
+		axisX += 1
+	end
+	if keys.a or holds.back then
+		axisX -= 1
+	end
+	if keys.s or holds.down then
+		axisZ += 1
+	end
+	if keys.w or holds.up then
+		axisZ -= 1
+	end
+	local racing = phase == "race" and player:GetAttribute("InRace") == true and player:GetAttribute("Finished") ~= true
+	if racing then
+		axisX = 1
+		local speed = player:GetAttribute("MoveSpeed")
+		if typeof(speed) == "number" then
+			hum.WalkSpeed = speed
+		end
+	elseif phase == "lobby" then
+		hum.WalkSpeed = Rules.LOBBY_SPEED
+	end
+	if jump and (racing or phase == "lobby") then
+		hum.Jump = true
+	end
+	local dir = Vector3.new(axisX, 0, axisZ)
+	if dir.Magnitude > 0.05 then
+		hum:Move(dir.Unit, false)
+	end
+end
+
+RunService:BindToRenderStep("NodexDrive", Enum.RenderPriority.Camera.Value + 1, drive)
+
+stateRemote.OnClientEvent:Connect(function(snapshot)
+	if typeof(snapshot) ~= "table" then
+		return
+	end
+	latest = snapshot
+	hud.render(snapshot)
+	applyCollected(snapshot.you and snapshot.you.collected or {})
+end)
+
+CollectionService:GetInstanceAddedSignal(Config.TAG_PICKUP):Connect(function()
+	if latest and latest.you then
+		applyCollected(latest.you.collected)
+	end
+end)
+
+fire({ t = "hello" })
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="17">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <float name="FallenPartsDestroyHeight">-80</float>
+      <float name="Gravity">196.2</float>
+      <bool name="NeedsPivotMigration">false</bool>
+      <bool name="StreamingEnabled">false</bool>
+    </Properties>
+  </Item>
+</roblox>
