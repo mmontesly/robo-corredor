@@ -101,6 +101,7 @@ local function ensureSafety()
 				if root and humanoid and humanoid.Health > 0 and root.Position.Y < -30 then
 					root.AssemblyLinearVelocity = Vector3.zero
 					root.AssemblyAngularVelocity = Vector3.zero
+					humanoid.PlatformStand = false
 					root.CFrame = CFrame.new(0, 8, 0)
 				end
 			end

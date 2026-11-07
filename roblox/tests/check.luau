@@ -324,6 +324,28 @@ check(not Rules.oilHits(10, 3, 11, 4, Rules.OIL_JUMP, 1, 2, false), "pulo passa 
 check(not Rules.oilHits(10, 3, 11, 0, Rules.OIL_JUMP, 1, 2, true), "óleo não repete o acerto")
 check(Rules.ROCKET_LIFE == 2.5, "vida do foguetinho do jogador")
 check(Rules.MAX_POWERS == 8, "limite de projéteis")
+check(Rules.tumbleCause("gear") and Rules.tumbleCause("oil"), "engrenagem e óleo capotam")
+check(not Rules.tumbleCause("battery") and not Rules.tumbleCause("rocket"), "bateria e foguetinho não capotam")
+check(Rules.TUMBLE_TIME > 0 and Rules.TUMBLE_TIME < 1.5, "capotagem curta")
+check(math.abs(Rules.tumbleSpin() * Rules.TUMBLE_TIME - (2 * math.pi)) < 1e-6, "uma volta e não gira sem parar")
+local tumbleUntil = 0
+local function tryTumble(t, kind)
+	if Rules.canBeginTumble(t, tumbleUntil) and Rules.tumbleCause(kind) then
+		tumbleUntil = t + Rules.TUMBLE_TIME
+		return true
+	end
+	return false
+end
+check(tryTumble(10, "gear"), "primeira batida capota")
+check(Rules.tumbleActive(10.2, tumbleUntil), "ainda capotando")
+check(not tryTumble(10.2, "gear"), "não reinicia a volta no meio")
+check(not tryTumble(10.2, "oil"), "óleo no meio não empilha outra volta")
+check(not Rules.tumbleActive(10 + Rules.TUMBLE_TIME, tumbleUntil), "recuperou no fim do tempo")
+check(tryTumble(10 + Rules.TUMBLE_TIME, "oil"), "depois de recuperar, outro óleo capota de novo")
+local afterOil = tumbleUntil
+check(not Rules.tumbleActive(afterOil, tumbleUntil), "a segunda capotagem também acaba")
+check(not tryTumble(afterOil, "rocket"), "foguetinho não capota mesmo com a recarga livre")
+check(tumbleUntil == afterOil, "foguetinho não altera o relógio da capotagem")
 check(Rules.POWER_CD > Rules.POWER_ARM, "recarga maior que a espera inicial")
 
 if fails > 0 then

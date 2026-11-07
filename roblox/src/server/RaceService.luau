@@ -171,6 +171,7 @@ local function teleport(player, x, y, z, yaw, anchored)
 	end
 	hrp.AssemblyLinearVelocity = Vector3.zero
 	hrp.AssemblyAngularVelocity = Vector3.zero
+	hum.PlatformStand = false
 	hrp.CFrame = pose(x, y, z, yaw)
 	hrp.Anchored = anchored
 	if anchored then
@@ -258,6 +259,7 @@ local function freshRoundFields(record)
 	record.parked = false
 	record.lastReset = 0
 	record.powerReadyAt = 0
+	record.tumbleUntil = 0
 	record.x = Course.SPAWN_X
 end
 
@@ -502,6 +504,7 @@ local function park(player, record)
 	record.parked = true
 	record.slowUntil = 0
 	record.turboUntil = 0
+	record.tumbleUntil = 0
 	local x, y, z, yaw = Course.finishHoldPose(record.colorIndex, record.slot)
 	teleport(player, x, y, z, yaw, true)
 	syncAttributes(player, record, 0)
@@ -649,7 +652,11 @@ local function startRace(now)
 			record.powerReadyAt = now + Rules.POWER_ARM
 			if hrp then
 				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.AssemblyAngularVelocity = Vector3.zero
 				hrp.Anchored = false
+			end
+			if hum then
+				hum.PlatformStand = false
 			end
 		end
 	end
@@ -677,6 +684,46 @@ end
 
 local function applySlow(record, now)
 	record.slowUntil = now + Rules.SLOW_TIME
+end
+
+local function faceAlign(hrp)
+	local align = hrp:FindFirstChild("FaceTrackAlign")
+	if align and align:IsA("AlignOrientation") then
+		return align
+	end
+	return nil
+end
+
+local function endTumble(player, record, faceTrack)
+	record.tumbleUntil = 0
+	local hrp, hum = humanoidOf(player)
+	if not hrp or not hum then
+		return
+	end
+	hum.PlatformStand = false
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	local align = faceAlign(hrp)
+	if align then
+		align.Enabled = faceTrack
+	end
+end
+
+local function beginTumble(player, record, now)
+	if not Rules.canBeginTumble(now, record.tumbleUntil or 0) then
+		return
+	end
+	local hrp, hum = humanoidOf(player)
+	if not hrp or not hum then
+		return
+	end
+	record.tumbleUntil = now + Rules.TUMBLE_TIME
+	local align = faceAlign(hrp)
+	if align then
+		align.Enabled = false
+	end
+	hum.PlatformStand = true
+	-- Uma volta só. Não reaplicar no quadro seguinte.
+	hrp.AssemblyAngularVelocity = Vector3.new(0, 0, Rules.tumbleSpin())
 end
 
 local function stepRacer(player, record, now, step)
@@ -710,6 +757,7 @@ local function stepRacer(player, record, now, step)
 		local x, y, z, yaw = Course.respawnPose(record.slot, record.checkpoint)
 		record.allowedX = x
 		record.x = x
+		record.tumbleUntil = 0
 		teleport(player, x, y, z, yaw, false)
 		bindSpawn(player, record)
 		syncAttributes(player, record, speed)
@@ -730,9 +778,11 @@ local function stepRacer(player, record, now, step)
 			if box.kind == "gear" and Course.penalizeGear(feetY, px, pz, box) then
 				hit = true
 				applySlow(record, now)
+				beginTumble(player, record, now)
 			elseif box.kind == "oil" and Course.penalizeOil(feetY, px, pz, box, false) then
 				hit = true
 				applySlow(record, now)
+				beginTumble(player, record, now)
 			elseif box.kind == "battery" and Course.collectBattery(hrpY, px, pz, box) then
 				hit = true
 				record.batteries += 1
@@ -768,11 +818,18 @@ local function stepRacer(player, record, now, step)
 		return
 	end
 
+	if (record.tumbleUntil or 0) ~= 0 and not Rules.tumbleActive(now, record.tumbleUntil) then
+		endTumble(player, record, true)
+	end
+	local tumbling = Rules.tumbleActive(now, record.tumbleUntil or 0)
 	speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
 	hum.AutoRotate = false
-	local align = hrp:FindFirstChild("FaceTrackAlign")
-	if align and align:IsA("AlignOrientation") then
-		align.Enabled = true
+	local align = faceAlign(hrp)
+	if align and align.Enabled == tumbling then
+		align.Enabled = not tumbling
+	end
+	if hum.PlatformStand ~= tumbling then
+		hum.PlatformStand = tumbling
 	end
 	hum.WalkSpeed = speed
 	hum.JumpHeight = Rules.JUMP_HEIGHT
@@ -950,6 +1007,10 @@ local function stepPowers(now, step)
 				if Rules.oilHits(puddle.x, Rules.OIL_HALF, record.x or 0, feetAbove, Rules.OIL_JUMP, puddle.ownerId, userId, puddle.hit[userId] == true) then
 					puddle.hit[userId] = true
 					applySlow(record, now)
+					local oilPlayer = Players:GetPlayerByUserId(userId)
+					if oilPlayer then
+						beginTumble(oilPlayer, record, now)
+					end
 				end
 			end
 		end
@@ -1125,6 +1186,9 @@ local function hookCharacter(player, char)
 		diedConn[player]:Disconnect()
 	end
 	diedConn[player] = hum.Died:Connect(function()
+		record.tumbleUntil = 0
+		hum.PlatformStand = false
+		hrp.AssemblyAngularVelocity = Vector3.zero
 		task.delay(0.6, function()
 			if player.Parent then
 				player:LoadCharacter()
@@ -1183,6 +1247,7 @@ local function onPlayer(player)
 		x = 0,
 		lastReset = 0,
 		powerReadyAt = 0,
+		tumbleUntil = 0,
 		parked = false,
 	}
 	records[player.UserId] = record
@@ -1223,6 +1288,7 @@ local function onLeave(player)
 	lastAction[player.UserId] = nil
 	freeJoin(player.UserId)
 	if record then
+		endTumble(player, record, false)
 		if record.inRound and (state.phase == "race" or state.phase == "countdown") and not record.finished then
 			record.gone = true
 			record.spectating = false
