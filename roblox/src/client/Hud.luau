@@ -154,6 +154,27 @@ function Hud.mount(playerGui, fire)
 	effectText.AutomaticSize = Enum.AutomaticSize.None
 	effectText.Visible = false
 
+	local turboChip = Instance.new("TextLabel")
+	turboChip.Name = "Turbo"
+	turboChip.AnchorPoint = Vector2.new(1, 0)
+	turboChip.Position = UDim2.new(1, -60, 0, 18)
+	turboChip.Size = UDim2.fromOffset(54, 16)
+	turboChip.BackgroundColor3 = paint(Config.BATTERY_CAP)
+	turboChip.Text = "TURBO"
+	turboChip.TextSize = 11
+	turboChip.Font = Enum.Font.GothamBold
+	turboChip.TextColor3 = paint(Config.NAVY)
+	turboChip.Visible = false
+	turboChip.ZIndex = 6
+	turboChip.Parent = top
+	corner(turboChip, 8)
+
+	local function setTurbo(turboLeft, racing)
+		local on = Rules.boostVisible(turboLeft or 0, true, racing == true)
+		turboChip.Visible = on
+		barFill.BackgroundColor3 = on and paint(Config.BATTERY_CAP) or paint(Config.BAR)
+	end
+
 	local resetBtn = Instance.new("TextButton")
 	resetBtn.AnchorPoint = Vector2.new(1, 0)
 	resetBtn.Size = UDim2.fromOffset(52, 16)
@@ -565,6 +586,7 @@ function Hud.mount(playerGui, fire)
 
 	return {
 		render = render,
+		setTurbo = setTurbo,
 		holds = function()
 			return holds
 		end,

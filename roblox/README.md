@@ -23,7 +23,7 @@ O servidor cria um chão laranja e uma placa **antes** de montar o robô e a pis
 
 Se a linha do **boot** não existir, o script do servidor não rodou (o Output fica só com mensagens padrão do Studio). Se existir `[Nodex] FALHA NO BOOT`, o erro completo está nessa mensagem e numa placa vermelha no mundo. A faixa de cima do cliente repete o mesmo texto. Não fica mais uma espera infinita sem aviso.
 
-No R6 o `HipHeight` é um deslocamento: a altura do root parado é o comprimento da perna mais metade do root mais esse valor. Com perna 2, root 2 e `HipHeight` 3 o pé ficava 3 studs no ar. O valor derivado da sola é 0. Bater na engrenagem ou pisar no óleo (da pista ou de outro robô) dá uma capotagem de 0,7 s, uma volta, e o robô se levanta sozinho. Pular por cima não capota. O óleo que você mesmo largou não te capota. O foguetinho só freia. A direção da corrida não mexe mais na altura do root a cada quadro. Na corrida o robô olha para a chegada (+X). A frente do modelo do Roblox é -Z; o rosto fica nesse lado. **Q** solta o foguetinho (freia quem está à frente, alcance curto, 2,5 s) e **E** larga óleo atrás (freia quem passar por cima no chão). Os dois compartilham **8 s** de recarga, com **2 s** de espera no começo. Sozinho o tiro aparece mesmo sem alvo. No computador as setas grandes de toque ficam escondidas.
+No R6 o `HipHeight` é um deslocamento: a altura do root parado é o comprimento da perna mais metade do root mais esse valor. Com perna 2, root 2 e `HipHeight` 3 o pé ficava 3 studs no ar. O valor derivado da sola é 0. A engrenagem capota 0,7 s e deixa meia velocidade por 1 s. O óleo capota 0,4 s (uma volta) e, ao fim, o robô volta a correr na velocidade cheia; a mesma mancha não dispara de novo. Pular por cima não capota. O óleo que você mesmo largou não te capota. O foguetinho só freia. A bateria acende um rastro dourado no robô e um chip TURBO na barra pelos 1,2 s do servidor. O rastro some quando o turbo acaba, na morte, no posto e no lobby. A direção da corrida não mexe mais na altura do root a cada quadro. Na corrida o robô olha para a chegada (+X). A frente do modelo do Roblox é -Z; o rosto fica nesse lado. **Q** solta o foguetinho (freia quem está à frente, alcance curto, 2,5 s) e **E** larga óleo atrás (freia quem passar por cima no chão). Os dois compartilham **8 s** de recarga, com **2 s** de espera no começo. Sozinho o tiro aparece mesmo sem alvo. No computador as setas grandes de toque ficam escondidas.
 
 ## O que este protótipo já faz
 
@@ -179,7 +179,8 @@ rojo build default.project.json -o Nodex-Robo-Corredor.rbxlx
 Não foi possível conferir aqui:
 
 - se o Humanoid do robô de blocos fica com o pé na esteira (`Course.HIP` é 3, a distância geométrica da sola ao centro do root; o `HipHeight` do R6 derivado disso é **0**);
-- se a capotagem de 0,7 s (uma volta) aparece na engrenagem e no óleo no chão, o robô se levanta e segue, e pular por cima não dispara;
+- se o óleo só para o robô pelos 0,4 s da capotagem e ele sai correndo, sem ficar preso na mancha; a engrenagem continua 0,7 s e mais 1 s devagar;
+- se a bateria mostra o rastro e o chip TURBO e os dois somem quando o 1,2 s acaba;
 - se o pulo de 8,5 studs passa folgado pela engrenagem de 3,6 sem raspar a cápsula do Humanoid;
 - câmera lateral, botões no tamanho de um celular de verdade, e duas janelas do Server & Clients ao mesmo tempo;
 - som: não há, de propósito (som da plataforma exigiria asset id).

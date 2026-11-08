@@ -153,15 +153,100 @@ local function syncStats(player, record)
 	folder.Lugar.Value = record.place or 0
 end
 
+local function ensureBoostFx(hrp)
+	local existing = hrp:FindFirstChild("NodexTurbo")
+	if existing then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "NodexTurbo"
+	local back = Instance.new("Attachment")
+	back.Name = "TurboBack"
+	back.Position = Vector3.new(0, 0.35, 0.55)
+	back.Parent = hrp
+	local tail = Instance.new("Attachment")
+	tail.Name = "TurboTail"
+	tail.Position = Vector3.new(0, 0.15, 1.7)
+	tail.Parent = hrp
+	local trail = Instance.new("Trail")
+	trail.Name = "TurboTrail"
+	trail.Attachment0 = back
+	trail.Attachment1 = tail
+	trail.Lifetime = 0.28
+	trail.MinLength = 0.04
+	trail.FaceCamera = true
+	trail.LightEmission = 0.55
+	trail.LightInfluence = 0.15
+	trail.WidthScale = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.5),
+		NumberSequenceKeypoint.new(1, 0.15),
+	})
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.05),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	trail.Color = ColorSequence.new(Color3.fromRGB(255, 214, 70), Color3.fromRGB(76, 201, 240))
+	trail.Enabled = false
+	trail.Parent = hrp
+	local sparks = Instance.new("ParticleEmitter")
+	sparks.Name = "TurboSparks"
+	sparks.Rate = 42
+	sparks.Lifetime = NumberRange.new(0.16, 0.3)
+	sparks.Speed = NumberRange.new(2, 5)
+	sparks.SpreadAngle = Vector2.new(14, 14)
+	sparks.EmissionDirection = Enum.NormalId.Back
+	sparks.Drag = 1.5
+	sparks.LightEmission = 0.65
+	sparks.LightInfluence = 0.1
+	sparks.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.72),
+		NumberSequenceKeypoint.new(1, 0.08),
+	})
+	sparks.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.05),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	sparks.Color = ColorSequence.new(Color3.fromRGB(255, 248, 210), Color3.fromRGB(255, 190, 11))
+	sparks.Enabled = false
+	sparks.Parent = back
+	folder.Parent = hrp
+	return folder
+end
+
+local function setBoostVisual(hrp, on)
+	local folder = ensureBoostFx(hrp)
+	local trail = hrp:FindFirstChild("TurboTrail")
+	local back = hrp:FindFirstChild("TurboBack")
+	local sparks = back and back:FindFirstChild("TurboSparks")
+	if trail and trail:IsA("Trail") then
+		trail.Enabled = on
+	end
+	if sparks and sparks:IsA("ParticleEmitter") then
+		sparks.Enabled = on
+		if not on then
+			sparks:Clear()
+		end
+	end
+	folder:SetAttribute("On", on == true)
+end
+
 local function syncAttributes(player, record, speed)
-	player:SetAttribute("InRace", state.phase == "race" and record.inRound and not record.gone and not record.finished)
+	local racing = state.phase == "race" and record.inRound and not record.gone and not record.finished
+	local turboLeft = math.max(0, (record.turboUntil or 0) - os.clock())
+	player:SetAttribute("InRace", racing)
 	player:SetAttribute("Finished", record.finished == true)
 	player:SetAttribute("Spectating", record.spectating == true or (state.phase ~= "lobby" and not record.inRound))
 	player:SetAttribute("MoveSpeed", speed)
+	player:SetAttribute("TurboLeft", turboLeft)
 	player:SetAttribute("Checkpoint", record.checkpoint or 0)
 	player:SetAttribute("Nick", record.nick)
 	player:SetAttribute("Slot", record.colorIndex)
 	player:SetAttribute("Ready", record.ready == true)
+	local hrp, hum = humanoidOf(player)
+	if hrp then
+		local alive = hum ~= nil and hum.Health > 0
+		setBoostVisual(hrp, Rules.boostVisible(turboLeft, alive, racing))
+	end
 end
 
 local function teleport(player, x, y, z, yaw, anchored)
@@ -700,30 +785,45 @@ local function endTumble(player, record, faceTrack)
 	if not hrp or not hum then
 		return
 	end
-	hum.PlatformStand = false
 	hrp.AssemblyAngularVelocity = Vector3.zero
+	hum.PlatformStand = false
+	if faceTrack and hum.Health > 0 then
+		-- Um quadro só, na posição atual. Não trava a altura durante a corrida.
+		-- Sem isso o Humanoid entra em GettingUp e o robô soldado fica parado.
+		local pos = hrp.Position
+		hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, Rules.TRACK_YAW, 0)
+		local vel = hrp.AssemblyLinearVelocity
+		hrp.AssemblyLinearVelocity = Vector3.new(math.max(hum.WalkSpeed, 0), vel.Y, 0)
+		hum:ChangeState(Enum.HumanoidStateType.Running)
+	end
 	local align = faceAlign(hrp)
 	if align then
 		align.Enabled = faceTrack
 	end
 end
 
-local function beginTumble(player, record, now)
-	if not Rules.canBeginTumble(now, record.tumbleUntil or 0) then
+local function beginTumble(player, record, now, kind)
+	local duration = Rules.tumbleDuration(kind)
+	if duration <= 0 or not Rules.canBeginTumble(now, record.tumbleUntil or 0) then
 		return
 	end
 	local hrp, hum = humanoidOf(player)
 	if not hrp or not hum then
 		return
 	end
-	record.tumbleUntil = now + Rules.TUMBLE_TIME
+	record.tumbleUntil = now + duration
 	local align = faceAlign(hrp)
 	if align then
 		align.Enabled = false
 	end
 	hum.PlatformStand = true
 	-- Uma volta só. Não reaplicar no quadro seguinte.
-	hrp.AssemblyAngularVelocity = Vector3.new(0, 0, Rules.tumbleSpin())
+	hrp.AssemblyAngularVelocity = Vector3.new(0, 0, Rules.tumbleSpinFor(duration))
+end
+
+local function applyOilSlip(player, record, now)
+	record.slowUntil = Rules.oilSlowUntil(now)
+	beginTumble(player, record, now, "oil")
 end
 
 local function stepRacer(player, record, now, step)
@@ -778,11 +878,10 @@ local function stepRacer(player, record, now, step)
 			if box.kind == "gear" and Course.penalizeGear(feetY, px, pz, box) then
 				hit = true
 				applySlow(record, now)
-				beginTumble(player, record, now)
-			elseif box.kind == "oil" and Course.penalizeOil(feetY, px, pz, box, false) then
+				beginTumble(player, record, now, "gear")
+			elseif box.kind == "oil" and Course.penalizeOil(feetY, px, pz, box, false) and Rules.canSlipPuddle(false, true, now, record.tumbleUntil or 0) then
 				hit = true
-				applySlow(record, now)
-				beginTumble(player, record, now)
+				applyOilSlip(player, record, now)
 			elseif box.kind == "battery" and Course.collectBattery(hrpY, px, pz, box) then
 				hit = true
 				record.batteries += 1
@@ -818,11 +917,13 @@ local function stepRacer(player, record, now, step)
 		return
 	end
 
-	if (record.tumbleUntil or 0) ~= 0 and not Rules.tumbleActive(now, record.tumbleUntil) then
+	local recovering = (record.tumbleUntil or 0) ~= 0 and not Rules.tumbleActive(now, record.tumbleUntil)
+	speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
+	hum.WalkSpeed = speed
+	if recovering then
 		endTumble(player, record, true)
 	end
 	local tumbling = Rules.tumbleActive(now, record.tumbleUntil or 0)
-	speed = Rules.currentSpeed(now, record.slowUntil, record.turboUntil)
 	hum.AutoRotate = false
 	local align = faceAlign(hrp)
 	if align and align.Enabled == tumbling then
@@ -831,7 +932,6 @@ local function stepRacer(player, record, now, step)
 	if hum.PlatformStand ~= tumbling then
 		hum.PlatformStand = tumbling
 	end
-	hum.WalkSpeed = speed
 	hum.JumpHeight = Rules.JUMP_HEIGHT
 	hum.UseJumpPower = false
 	record.x = hrp.Position.X
@@ -1004,12 +1104,12 @@ local function stepPowers(now, step)
 				if hrp and hum then
 					feetAbove = feetOf(hrp, hum) - Course.FLOOR_TOP
 				end
-				if Rules.oilHits(puddle.x, Rules.OIL_HALF, record.x or 0, feetAbove, Rules.OIL_JUMP, puddle.ownerId, userId, puddle.hit[userId] == true) then
+				local alreadySlip = puddle.hit[userId] == true
+				if Rules.oilHits(puddle.x, Rules.OIL_HALF, record.x or 0, feetAbove, Rules.OIL_JUMP, puddle.ownerId, userId, alreadySlip) and Rules.canSlipPuddle(alreadySlip, true, now, record.tumbleUntil or 0) then
 					puddle.hit[userId] = true
-					applySlow(record, now)
 					local oilPlayer = Players:GetPlayerByUserId(userId)
 					if oilPlayer then
-						beginTumble(oilPlayer, record, now)
+						applyOilSlip(oilPlayer, record, now)
 					end
 				end
 			end
@@ -1187,8 +1287,10 @@ local function hookCharacter(player, char)
 	end
 	diedConn[player] = hum.Died:Connect(function()
 		record.tumbleUntil = 0
+		record.turboUntil = 0
 		hum.PlatformStand = false
 		hrp.AssemblyAngularVelocity = Vector3.zero
+		syncAttributes(player, record, 0)
 		task.delay(0.6, function()
 			if player.Parent then
 				player:LoadCharacter()

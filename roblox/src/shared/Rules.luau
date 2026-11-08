@@ -35,8 +35,11 @@ Rules.OIL_BEHIND = 4
 Rules.OIL_HALF = 3
 Rules.OIL_JUMP = 2.15
 Rules.MAX_POWERS = 8
--- Uma volta completa no plano da pista, curta o bastante para não travar a corrida.
+-- Engrenagem: uma volta em 0,7 s. O óleo é mais curto: 0,4 s e a velocidade
+-- cheia volta junto com o fim da capotagem. A pausa longa vinha do estado
+-- GettingUp do Humanoid, não deste relógio.
 Rules.TUMBLE_TIME = 0.7
+Rules.OIL_TUMBLE_TIME = 0.4
 -- Frente do Humanoid é -Z. A pista corre para +X.
 -- CFrame.Angles(0, yaw, 0).LookVector = (-sin(yaw), 0, -cos(yaw)).
 Rules.TRACK_YAW = -math.pi / 2
@@ -138,9 +141,45 @@ function Rules.tumbleCause(kind: string): boolean
 	return kind == "gear" or kind == "oil"
 end
 
--- Uma volta em torno de Z (o eixo da câmera lateral) durante TUMBLE_TIME.
+function Rules.tumbleDuration(kind: string): number
+	if kind == "oil" then
+		return Rules.OIL_TUMBLE_TIME
+	elseif kind == "gear" then
+		return Rules.TUMBLE_TIME
+	end
+	return 0
+end
+
+-- Uma volta em torno de Z (o eixo da câmera lateral) durante a duração.
+function Rules.tumbleSpinFor(duration: number): number
+	return (2 * math.pi) / duration
+end
+
 function Rules.tumbleSpin(): number
-	return (2 * math.pi) / Rules.TUMBLE_TIME
+	return Rules.tumbleSpinFor(Rules.TUMBLE_TIME)
+end
+
+-- O freio do óleo acaba no mesmo instante da capotagem.
+function Rules.oilSlowUntil(now: number): number
+	return now + Rules.OIL_TUMBLE_TIME
+end
+
+function Rules.gearSlowUntil(now: number): number
+	return now + Rules.SLOW_TIME
+end
+
+-- Mancha já escorregada não dispara de novo, mesmo com o robô parado em cima
+-- depois que o relógio zerou. Outra mancha, com o relógio livre, pode.
+function Rules.canSlipPuddle(already: boolean, stillInside: boolean, now: number, tumbleUntil: number): boolean
+	if already or not stillInside or Rules.tumbleActive(now, tumbleUntil) then
+		return false
+	end
+	return Rules.canBeginTumble(now, tumbleUntil)
+end
+
+-- Rastro e chip só enquanto o servidor ainda conta turbo, o robô vive e corre.
+function Rules.boostVisible(turboLeft: number, alive: boolean, racing: boolean): boolean
+	return alive and racing and turboLeft > 0
 end
 
 function Rules.jumpVelocity(gravity: number?): number

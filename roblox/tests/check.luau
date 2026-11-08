@@ -346,6 +346,43 @@ local afterOil = tumbleUntil
 check(not Rules.tumbleActive(afterOil, tumbleUntil), "a segunda capotagem também acaba")
 check(not tryTumble(afterOil, "rocket"), "foguetinho não capota mesmo com a recarga livre")
 check(tumbleUntil == afterOil, "foguetinho não altera o relógio da capotagem")
+check(Rules.tumbleDuration("gear") == Rules.TUMBLE_TIME, "engrenagem continua em 0,7 s")
+check(Rules.tumbleDuration("oil") == Rules.OIL_TUMBLE_TIME, "óleo capota em 0,4 s")
+check(Rules.OIL_TUMBLE_TIME < Rules.TUMBLE_TIME, "óleo é mais curto que a engrenagem")
+check(math.abs(Rules.tumbleSpinFor(Rules.OIL_TUMBLE_TIME) * Rules.OIL_TUMBLE_TIME - (2 * math.pi)) < 1e-6, "óleo também dá uma volta só")
+check(Rules.oilSlowUntil(5) == 5 + Rules.OIL_TUMBLE_TIME, "o freio do óleo acaba com a capotagem")
+check(Rules.gearSlowUntil(5) == 5 + Rules.SLOW_TIME, "engrenagem continua 1 s devagar")
+check(Rules.currentSpeed(5 + Rules.OIL_TUMBLE_TIME, Rules.oilSlowUntil(5), 0) == Rules.BASE_SPEED, "no fim do óleo a velocidade é a da corrida")
+local slipNow = 20
+local slipUntil = 0
+local slipSlow = 0
+local slipped = false
+local slips = 0
+local stopped = 0
+local slipDt = 0.05
+for _ = 1, 40 do
+	if Rules.canSlipPuddle(slipped, true, slipNow, slipUntil) then
+		slips += 1
+		slipped = true
+		slipUntil = slipNow + Rules.tumbleDuration("oil")
+		slipSlow = Rules.oilSlowUntil(slipNow)
+	end
+	if Rules.tumbleActive(slipNow, slipUntil) then
+		stopped += slipDt
+	end
+	slipNow += slipDt
+end
+check(slips == 1, "ficar na mesma mancha capota uma vez")
+check(math.abs(stopped - Rules.OIL_TUMBLE_TIME) < 1e-6, "parado só durante a capotagem do óleo")
+check(Rules.currentSpeed(slipNow, slipSlow, 0) == Rules.BASE_SPEED, "depois de permanecer no óleo, corre de novo")
+check(not Rules.canSlipPuddle(true, true, slipNow, 0), "continuar em cima não reabre a capotagem")
+check(Rules.canSlipPuddle(false, true, slipNow, 0), "outra mancha, com o relógio livre, capota")
+check(not Rules.canSlipPuddle(false, false, slipNow, 0), "fora da mancha não escorrega")
+check(Rules.boostVisible(Rules.TURBO_TIME, true, true), "turbo acende na coleta")
+check(Rules.boostVisible(0.05, true, true), "turbo segue aceso enquanto o servidor conta")
+check(not Rules.boostVisible(0, true, true), "turbo apaga quando o tempo acaba")
+check(not Rules.boostVisible(Rules.TURBO_TIME, false, true), "turbo apaga na morte")
+check(not Rules.boostVisible(Rules.TURBO_TIME, true, false), "turbo apaga fora da corrida")
 check(Rules.POWER_CD > Rules.POWER_ARM, "recarga maior que a espera inicial")
 
 if fails > 0 then

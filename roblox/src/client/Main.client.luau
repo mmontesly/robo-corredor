@@ -250,10 +250,12 @@ local function drive(_dt)
 		end
 	end
 	if not hum or not hrp or hum.Health <= 0 or hrp.Anchored then
+		hud.setTurbo(0, false)
 		return
 	end
 	local phase = ReplicatedStorage:GetAttribute("Phase")
 	if phase == "countdown" or phase == "podium" then
+		hud.setTurbo(0, false)
 		return
 	end
 	local holds = hud.holds()
@@ -272,6 +274,11 @@ local function drive(_dt)
 		axisZ -= 1
 	end
 	local racing = phase == "race" and player:GetAttribute("InRace") == true and player:GetAttribute("Finished") ~= true
+	local turboLeft = player:GetAttribute("TurboLeft")
+	if typeof(turboLeft) ~= "number" then
+		turboLeft = 0
+	end
+	hud.setTurbo(turboLeft, racing)
 	if racing then
 		axisX = 1
 		hum.AutoRotate = false
